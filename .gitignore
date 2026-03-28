@@ -1,0 +1,15 @@
+# Geheimnisse und Konfiguration
+config.py
+TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID
+
+# Python-Dateien
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+
+# Datenbank und Bilder
+*.db
+*.png
