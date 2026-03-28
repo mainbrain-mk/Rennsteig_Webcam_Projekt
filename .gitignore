@@ -1,7 +1,5 @@
 # Geheimnisse und Konfiguration
-config.py
-TELEGRAM_BOT_TOKEN
-TELEGRAM_CHAT_ID
+.env
 
 # Python-Dateien
 __pycache__/
