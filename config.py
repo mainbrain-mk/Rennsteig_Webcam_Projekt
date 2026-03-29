@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 URL_WEBCAM = "https://webcam.rennsteigbahn.de/webcam.jpg"
 

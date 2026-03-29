@@ -48,6 +48,12 @@ async def telegram_loop(viewer):
         logger.info("Telegram deaktiviert – Loop wird nicht gestartet.")
         return
 
+    """
+    await asyncio.sleep(5)
+    if viewer.last_raw_image is not None:
+        await send_current_viewer_image(viewer)
+    """
+
     while True:
 
         # 1. Reguläre Wartezeit bis zur nächsten vollen Stunde (+ 1 Minute)
@@ -72,7 +78,7 @@ async def telegram_loop(viewer):
 
             # Werte auslesen (mit Fallback '--' falls Daten fehlen)
             temp = w.get('temp', '--')
-            wind = w.get('wind_speed', '--')
+            wind = w.get('wind_speed') or w.get('wind', '--')
 
             # Caption zusammenbauen
             caption_text = f"🌡 Temperatur: {temp}°C\n💨 Wind: {wind} km/h"
@@ -97,10 +103,10 @@ async def send_current_viewer_image(viewer):
 
         # Werte auslesen (mit Fallback '--' falls Daten fehlen)
         temp = w.get('temp', '--')
-        wind = w.get('wind_speed', '--')
+        wind = w.get('wind_speed') or w.get('wind_speed_10m', '--')
 
         # Caption zusammenbauen
-        caption_text = f"🌡 Temperatur: {temp}°C\n💨 Wind: {wind} km/h"
+        caption_text = f"🌡 Temperatur: {temp}\n💨 Wind: {wind} km/h"
 
         await send_telegram_photo(img, caption=caption_text)
 
