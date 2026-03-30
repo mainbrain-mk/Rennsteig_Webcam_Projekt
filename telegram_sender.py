@@ -97,7 +97,7 @@ async def send_current_viewer_image(viewer):
 
         # Werte auslesen (mit Fallback '--' falls Daten fehlen)
         temp = w.get('temp', '--')
-        wind = w.get('wind_speed') or w.get('wind_speed_10m', '--')
+        wind = w.get('wind', '--')
 
         # Caption zusammenbauen
         caption_text = f"🌡 Temperatur: {temp}\n💨 Wind: {wind} km/h"
