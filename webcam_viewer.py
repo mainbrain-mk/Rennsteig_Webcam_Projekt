@@ -226,25 +226,32 @@ class WebcamViewer(QWidget):
         # Hier könntest du ggf. noch Aufräumarbeiten erledigen
         event.accept()
 
+    def toggle_fullscreen(self):
+        """Schaltet zwischen Vollbild und normaler Fensteransicht um."""
+        if self.isFullScreen():
+            self.showNormal()
+            if hasattr(self, 'old_geometry') and self.old_geometry:
+                self.setGeometry(self.old_geometry)
+            logger.info("Vollbildmodus beendet.")
+        else:
+            self.old_geometry = self.geometry()
+            self.showFullScreen()
+            logger.info("Vollbildmodus aktiviert.")
+
+    def mouseDoubleClickEvent(self, event):
+        """Aktiviert/Deaktiviert Vollbild bei Doppelklick mit der linken Maustaste."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.toggle_fullscreen()
+        super().mouseDoubleClickEvent(event)
+
     def keyPressEvent(self, event):
         """Behandelt Tastatureingaben für den Vollbildmodus."""
         # Strg + F Trigger
         if event.key() == Qt.Key.Key_F and (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
-            if self.isFullScreen():
-                self.showNormal()
-                if self.old_geometry:
-                    self.setGeometry(self.old_geometry)  # Alte Größe wiederherstellen
-                logger.info("Vollbildmodus beendet, ursprüngliche Größe wiederhergestellt.")
-            else:
-                self.old_geometry = self.geometry()  # Aktuelle Größe merken
-                print(self.old_geometry)
-                self.showFullScreen()
-                logger.info("Vollbildmodus aktiviert.")
+            self.toggle_fullscreen()
 
         # Esc beendet den Vollbildmodus ebenfalls
         elif event.key() == Qt.Key.Key_Escape and self.isFullScreen():
-            self.showNormal()
-            if self.old_geometry:
-                self.setGeometry(self.old_geometry)
+            self.toggle_fullscreen()
 
         super().keyPressEvent(event)
