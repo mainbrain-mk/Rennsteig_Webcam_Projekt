@@ -127,7 +127,7 @@ class ChartDialog(QDialog):
 
                             # Slot als "erledigt" markieren
                             last_marked_slot = current_slot
-                            logger.info(f"Windpfeil nachgeholt um {dt.hour}:{dt.minute}")
+                            logger.debug(f"Windpfeil nachgeholt um {dt.hour}:{dt.minute}")
                         except ValueError:
                             continue  # Falls r[4] keine Zahl ist
 
@@ -228,7 +228,7 @@ class ChartDialog(QDialog):
                 m = self.chart.legend().markers(grid_line)
                 if m: m[0].setVisible(False)
 
-            logger.info(f"green_col: {green_col}, blue_col: {blue_col}")
+            logger.debug(f"green_col: {green_col}, blue_col: {blue_col}")
 
     def update_chart_background(self, color_top=QColor(40, 80, 40, 150), color_bottom=QColor(40, 60, 100, 150)):
         # Neuen Gradienten erstellen
@@ -302,13 +302,13 @@ class ChartDialog(QDialog):
 
             self.darker -= 1
             self.update_chart_background()
-            logger.info(f"NumPad Plus gedrückt: darker={self.darker}")
+            logger.debug(f"NumPad Plus gedrückt: darker={self.darker}")
 
         # Minus-Taste auf dem Nummernblock
         elif event.key() == Qt.Key_Minus:
             self.darker += 1
             self.update_chart_background()
-            logger.info(f"NumPad Minus gedrückt: darker={self.darker}")
+            logger.debug(f"NumPad Minus gedrückt: darker={self.darker}")
         else:
             super().keyPressEvent(event)
 
