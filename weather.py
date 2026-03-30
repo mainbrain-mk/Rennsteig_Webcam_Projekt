@@ -48,8 +48,12 @@ class WeatherService:
         raw_time = cw.get("time")
         try:
             dt_local = datetime.fromisoformat(raw_time).replace(tzinfo=tz_info)
+            dt_utc = dt_local.astimezone(timezone.utc)
+            cw["datetime_utc"] = dt_utc.isoformat(timespec='seconds')
         except (ValueError, TypeError):
             dt_local = datetime.now(tz_info)
+            dt_utc = None
+            cw["datetime_utc"] = None
 
         # Wetterdaten extrahieren
         temp = cw.get("temperature_2m")
@@ -69,6 +73,7 @@ class WeatherService:
         # Kompaktes Dictionary für das Overlay bauen
         self.formatted_data = {
             "datetime": dt_local,
+            "datetime_utc": dt_utc,
             "icon": icon,
             "text": text,
             "elevation": f"{int(elevation)} m ü. NHN",

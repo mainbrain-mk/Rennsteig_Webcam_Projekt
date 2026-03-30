@@ -37,6 +37,15 @@ def init_db():
 def save_weather_to_db(data: dict):
     """Speichert die erweiterten Daten inklusive rain, showers und snowfall."""
     if not data or "current" not in data:
+        logger.warning("Keine gültigen Wetterdaten zum Speichern erhalten.")
+        return
+
+    cw = data.get("current", {})
+    # Hier greifen wir auf den in weather.py injizierten UTC-String zu
+    timestamp_utc = cw.get("datetime_utc")
+
+    if not timestamp_utc:
+        logger.error("Datenbank-Eintrag übersprungen: Ungültiger oder fehlender UTC-Zeitstempel.")
         return
 
     cw = data.get("current", {})
@@ -52,7 +61,7 @@ def save_weather_to_db(data: dict):
                 weather_code, cloud_cover, pressure, is_day
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            cw.get("time"),
+            timestamp_utc,
             cw.get("temperature_2m"),
             cw.get("apparent_temperature"),
             cw.get("relative_humidity_2m"),
