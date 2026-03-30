@@ -54,7 +54,7 @@ class ChartDialog(QDialog):
         # 2. Achsen Setup
         self.axis_x = QDateTimeAxis()
         self.axis_x.setFormat("dd.MM. HH:mm")
-        self.axis_x.setLabelsAngle(-45)
+        self.axis_x.setLabelsAngle(-75)
         # Vertikale Gitterlinien dezent gepunktet
         x_grid = QPen(QColor(60, 60, 70))
         x_grid.setStyle(Qt.DotLine)
