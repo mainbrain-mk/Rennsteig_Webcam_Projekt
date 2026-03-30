@@ -1,9 +1,10 @@
 import logging
+import traceback
 from datetime import datetime, timedelta
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel
-from PySide6.QtCore import Qt, QDateTime
+from PySide6.QtCore import Qt, QDateTime, QMargins
 from PySide6.QtCharts import QChart, QChartView, QLineSeries, QDateTimeAxis, QValueAxis, QScatterSeries
-from PySide6.QtGui import QPainter, QColor, QPen, QPainterPath, QTransform, QImage, QBrush
+from PySide6.QtGui import QPainter, QColor, QPen, QImage, QPainterPath, QBrush
 
 from database import load_last_7_days
 
@@ -13,185 +14,172 @@ logger = logging.getLogger(__name__)
 class ChartDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Wetterverlauf Rennsteigbahn – Modern")
+        self.setWindowTitle("Wetterverlauf Rennsteigbahn")
         self.resize(1280, 720)
-
         layout = QVBoxLayout(self)
 
         rows = load_last_7_days()
         if not rows:
-            layout.addWidget(QLabel("Keine Daten in der Datenbank gefunden."))
+            layout.addWidget(QLabel("Keine Daten gefunden."))
             return
 
-        # --- 1. Datenreihen & Styling (unverändert) ---
-        temp_series = QLineSeries()
-        temp_series.setName("Temperatur (°C)")
-        wind_series = QLineSeries()
-        wind_series.setName("Wind (km/h)")
-        feels_like_series = QLineSeries()
-        feels_like_series.setName("Gefühlt (°C)")
+        # 1. Chart Setup
+        self.chart = QChart()
+        self.chart.setTheme(QChart.ChartThemeDark)
+        self.chart.setBackgroundVisible(False)
 
+        # Platz für die schrägen Labels der X-Achse schaffen
+        self.chart.setMargins(QMargins(15, 10, 15, 60))
+        self.chart.layout().setContentsMargins(0, 0, 0, 0)
+
+        self.view = QChartView(self.chart)
+        self.view.setRenderHint(QPainter.Antialiasing)
+        layout.addWidget(self.view)
+
+        # 2. Achsen Setup
+        self.axis_x = QDateTimeAxis()
+        self.axis_x.setFormat("dd.MM. HH:mm")
+        self.axis_x.setLabelsAngle(-45)  # Schräge Darstellung für bessere Lesbarkeit
+
+        self.axis_y_temp = QValueAxis()
+        self.axis_y_temp.setTitleText("Temperatur [°C]")
+
+        self.axis_y_wind = QValueAxis()
+        self.axis_y_wind.setTitleText("Wind [km/h]")
+
+        self.chart.addAxis(self.axis_x, Qt.AlignBottom)
+        self.chart.addAxis(self.axis_y_temp, Qt.AlignLeft)
+        self.chart.addAxis(self.axis_y_wind, Qt.AlignRight)
+
+        # 3. Series initialisieren
+        self.temp_series = QLineSeries()
+        self.temp_series.setName("Temperatur")
+        self.temp_series.setPen(QPen(QColor("#0078d4"), 3))
+
+        self.feels_series = QLineSeries()
+        self.feels_series.setName("Gefühlt")
+        self.feels_series.setPen(QPen(QColor("#4fc3f7"), 1, Qt.DotLine))
+
+        self.wind_series = QLineSeries()
+        self.wind_series.setName("Wind")
+        self.wind_series.setPen(QPen(QColor("#228b22"), 2))
+
+        # Windpfeile Setup
         directions = ["N", "NO", "O", "SO", "S", "SW", "W", "NW"]
-        dir_series_map = {d: QScatterSeries() for d in directions}
+        self.dir_series_map = {d: QScatterSeries() for d in directions}
+        self._setup_wind_icons(directions)
 
-        # Pfeil-Design (unverändert)
-        arrow_path = QPainterPath()
-        arrow_path.moveTo(0, 11);
-        arrow_path.lineTo(-6, -6);
-        arrow_path.lineTo(0, -3);
-        arrow_path.lineTo(6, -6);
-        arrow_path.closeSubpath()
-
-        for d_name, s in dir_series_map.items():
-            s.setName(f"Wind: {d_name}");
-            s.setBorderColor(Qt.transparent);
-            s.setMarkerSize(26)
-            img = QImage(24, 24, QImage.Format_ARGB32);
-            img.fill(Qt.transparent)
-            p = QPainter(img);
-            p.setRenderHint(QPainter.Antialiasing);
-            p.translate(12, 12)
-            p.rotate(directions.index(d_name) * 45);
-            p.setPen(Qt.NoPen);
-            p.setBrush(QColor("#228b22").lighter(150))
-            p.drawPath(arrow_path);
-            p.end()
-            s.setBrush(QBrush(img));
-            s.setMarkerShape(QScatterSeries.MarkerShapeRectangle)
-
-        # --- 2. Daten laden ---
+        # 4. Daten verarbeiten
+        t_data = []
         for r in rows:
             try:
                 dt = datetime.fromisoformat(r[0])
-                ts = QDateTime(dt).toMSecsSinceEpoch()
-                temp_series.append(ts, r[1])
-                wind_series.append(ts, r[2])
-                if len(r) > 3: feels_like_series.append(ts, r[3])
-                # Windpfeile nur an 8h-Marken (0, 8, 16)
-                if dt.hour % 8 == 0 and dt.minute == 0:
-                    if len(r) > 4:
-                        deg = r[4];
-                        idx = int((deg + 22.5) / 45) % 8
-                        dir_series_map[directions[idx]].append(ts, r[2])
-            except (ValueError, IndexError):
+                # Hier der entscheidende Fix für die Punkte:
+                qt_dt = QDateTime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second, 0, Qt.UTC)
+                ts = float(qt_dt.toMSecsSinceEpoch())
+                t, w = float(r[1]), float(r[2])
+
+                self.temp_series.append(ts, t)
+                self.wind_series.append(ts, w)
+                t_data.append(t)
+
+                if len(r) > 3 and r[3] is not None:
+                    f = float(r[3])
+                    self.feels_series.append(ts, f)
+                    t_data.append(f)
+
+                # Windpfeile alle 8h (00, 08, 16 Uhr)
+                if dt.hour % 8 == 0 and dt.minute == 0 and len(r) > 4 and r[4] is not None:
+                    idx = int((float(r[4]) + 22.5) / 45) % 8
+                    self.dir_series_map[directions[idx]].append(ts, w)
+            except:
+                traceback.print_exc()
                 continue
 
-        # --- 3. Chart & Achsen-Setup ---
-        chart = QChart()
-        chart.setTitle("Wetterdaten der letzten 7 Tage")
-        chart.setTheme(QChart.ChartThemeDark)
+        # 5. Series binden
+        for s in [self.temp_series, self.feels_series]:
+            self.chart.addSeries(s)
+            s.attachAxis(self.axis_x)
+            s.attachAxis(self.axis_y_temp)
 
-        axis_x = QDateTimeAxis()
-        axis_x.setFormat("dd. HH:mm")
-        axis_x.setGridLineVisible(False)  # Wir zeichnen selbst
-        chart.addAxis(axis_x, Qt.AlignBottom)
+        self.chart.addSeries(self.wind_series)
+        self.wind_series.attachAxis(self.axis_x)
+        self.wind_series.attachAxis(self.axis_y_wind)
 
-        axis_y_temp = QValueAxis()
-        axis_y_temp.setTitleText("Temperatur [°C]")
-        axis_y_temp.setGridLineVisible(False)
-        chart.addAxis(axis_y_temp, Qt.AlignLeft)
+        for s in self.dir_series_map.values():
+            self.chart.addSeries(s)
+            s.attachAxis(self.axis_x)
+            s.attachAxis(self.axis_y_wind)
+            m = self.chart.legend().markers(s)
+            if m: m[0].setVisible(False)
 
-        # --- 4. Y-Skalierung (Temperatur) ---
-        all_t = [p.y() for p in temp_series.points()] + [p.y() for p in feels_like_series.points()]
-        y_min = (int(min(all_t)) // 2) * 2 - 2 if all_t else -10
-        y_max = (int(max(all_t)) // 2) * 2 + 2 if all_t else 10
-        num_ticks_y = int((y_max - y_min) / 2) + 1
-        axis_y_temp.setRange(y_min, y_max)
-        axis_y_temp.setTickCount(num_ticks_y)
-        axis_y_temp.setLabelFormat("%d")
-
-        # --- 5. Fixiertes 8h-Raster für X-Achse ---
-        if rows:
+        # 6. Skalierung und Achsen-Logik
+        if t_data:
             first_dt = datetime.fromisoformat(rows[0][0])
             last_dt = datetime.fromisoformat(rows[-1][0])
 
-            # Start: Letzte glatte 8h-Marke (0, 8, 16)
-            start_hour = (first_dt.hour // 8) * 8
-            base_start = first_dt.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+            # 1. Start auf die letzte glatte 8h-Marke abrunden
+            start_py = first_dt.replace(hour=(first_dt.hour // 8) * 8, minute=0, second=0, microsecond=0)
 
-            # Ende: Nächste glatte 8h-Marke nach dem letzten Datenpunkt
-            end_dt = last_dt.replace(minute=0, second=0, microsecond=0)
-            while end_dt.hour % 8 != 0 or end_dt < last_dt:
-                end_dt += timedelta(hours=1)
+            # 2. Endpunkt berechnen
+            # Wir ignorieren die tatsächliche duration_hours und erzwingen das Raster
+            # Bei 7 Tagen (ca. 168h) und 8h Schritten = 21 Intervalle -> 22 Ticks
+            diff_py = last_dt - start_py
+            # Wir runden auf das nächste 8h Intervall auf
+            num_intervals = int(diff_py.total_seconds() // 28800) + 1
+            end_py = start_py + timedelta(hours=num_intervals * 8)
+            num_ticks = num_intervals + 1
 
-            axis_x.setRange(QDateTime(base_start), QDateTime(end_dt))
+            # 3. Qt-Objekte OHNE Zeitzonen-Konvertierung erstellen
+            # Wir übergeben Jahr, Monat, Tag, Stunde direkt.
+            # Qt interpretiert das als "LocalTime", was für die Anzeige korrekt ist.
+            qt_start = QDateTime(start_py.year, start_py.month, start_py.day, start_py.hour, 0, 0, 0, Qt.UTC)
+            qt_end = QDateTime(end_py.year, end_py.month, end_py.day, end_py.hour, 0, 0, 0, Qt.UTC)
 
-            # TickCount erzwingen: (Gesamtstunden / 8) + 1
-            total_hours = (end_dt - base_start).total_seconds() / 3600
-            axis_x.setTickCount(int(total_hours // 8) + 1)
+            logger.info(f"DST-Safe Range: {qt_start.toString('dd.MM. HH:mm')} bis {qt_end.toString('dd.MM. HH:mm')}")
+            logger.info(f"Intervalle: {num_intervals}, Ticks: {num_ticks}")
+            logger.info(f"qt_start: {qt_start}, qt_end: {qt_end}")
 
-            # Manuelles vertikales Gitter
-            curr = base_start
-            while curr <= end_dt:
-                v_line = QLineSeries()
-                ts = QDateTime(curr).toMSecsSinceEpoch()
-                v_line.append(ts, y_min);
-                v_line.append(ts, y_max)
-                v_line.setPen(QPen(QColor(75, 75, 75), 1))
-                chart.addSeries(v_line)
-                v_line.attachAxis(axis_x);
-                v_line.attachAxis(axis_y_temp)
-                chart.legend().markers(v_line)[0].setVisible(False)
-                curr += timedelta(hours=8)
+            self.axis_x.setTickCount(num_ticks)
+            self.axis_x.setRange(qt_start, qt_end)
 
-        # --- 6. Horizontales Gitter (Temperatur) ---
-        curr_y = y_min
-        while curr_y <= y_max:
-            h_line = QLineSeries()
-            h_line.append(axis_x.min().toMSecsSinceEpoch(), curr_y)
-            h_line.append(axis_x.max().toMSecsSinceEpoch(), curr_y)
-            col = QColor("#4fc3f7") if curr_y == 0 else (QColor(40, 60, 120) if curr_y < 0 else QColor(50, 80, 50))
-            h_line.setPen(QPen(col, 1, Qt.DashLine if curr_y != 0 else Qt.SolidLine))
-            chart.addSeries(h_line)
-            h_line.attachAxis(axis_x);
-            h_line.attachAxis(axis_y_temp)
-            chart.legend().markers(h_line)[0].setVisible(False)
-            curr_y += 2
+            # Y-Achse Temperatur: Saubere 2-Grad-Schritte
+            y_min = (int(min(t_data)) // 2) * 2 - 2
+            y_max = (int(max(t_data)) // 2) * 2 + 2
+            self.axis_y_temp.setRange(y_min, y_max)
+            self.axis_y_temp.setTickCount(int((y_max - y_min) / 2) + 1)
 
-        # --- 7. Wind-Achse (Rechts) ---
-        axis_y_wind = QValueAxis()
-        axis_y_wind.setTitleText("Wind [km/h]");
-        axis_y_wind.setGridLineVisible(False)
-        chart.addAxis(axis_y_wind, Qt.AlignRight)
+            # Y-Achse Wind: Festes Raster
+            self.axis_y_wind.setRange(0, 32)
+            self.axis_y_wind.setTickCount(5)
 
-        all_w = [p.y() for p in wind_series.points()]
-        w_max_limit = (int(max(all_w) / (num_ticks_y - 1)) + 1) * (num_ticks_y - 1) if all_w else 30
-        axis_y_wind.setRange(0, max(w_max_limit, (num_ticks_y - 1) * 3))
-        axis_y_wind.setTickCount(num_ticks_y)
-        axis_y_wind.setLabelFormat("%.1f")
-
-        # --- 8. Finale Bindung ---
-        for s, ax_y in [(temp_series, axis_y_temp), (feels_like_series, axis_y_temp), (wind_series, axis_y_wind)]:
-            chart.addSeries(s);
-            s.attachAxis(axis_x);
-            s.attachAxis(ax_y)
-
-        temp_series.setPen(QPen(QColor("#0078d4"), 3))
-        feels_like_series.setPen(QPen(QColor("#4fc3f7"), 2, Qt.DotLine))
-        wind_series.setPen(QPen(QColor("#228b22"), 2, Qt.DashLine))
-
-        for s in dir_series_map.values():
-            chart.addSeries(s)
-            s.attachAxis(axis_x)
-            s.attachAxis(axis_y_wind)
-            chart.legend().markers(s)[0].setVisible(False)
-
-        chart_view = QChartView(chart)
-        chart_view.setRenderHint(QPainter.Antialiasing)
-        layout.addWidget(chart_view)
+    def _setup_wind_icons(self, directions):
+        path = QPainterPath()
+        path.moveTo(0, 8)
+        path.lineTo(-4, -4)
+        path.lineTo(0, -2)
+        path.lineTo(4, -4)
+        path.closeSubpath()
+        for i, d in enumerate(directions):
+            img = QImage(20, 20, QImage.Format_ARGB32)
+            img.fill(Qt.transparent)
+            p = QPainter(img)
+            p.setRenderHint(QPainter.Antialiasing)
+            p.translate(10, 10)
+            p.rotate(i * 45)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor("#228b22").lighter(150))
+            p.drawPath(path)
+            p.end()
+            self.dir_series_map[d].setBrush(QBrush(img))
+            self.dir_series_map[d].setMarkerShape(QScatterSeries.MarkerShapeRectangle)
+            self.dir_series_map[d].setMarkerSize(20)
+            self.dir_series_map[d].setBorderColor(Qt.transparent)
 
     def keyPressEvent(self, event):
+        # Screenshot-Funktion mit Strg+S
         if event.key() == Qt.Key_S and (event.modifiers() & Qt.ControlModifier):
-            chart_view = self.findChild(QChartView)
-            if chart_view:
-                image = QImage(chart_view.size(), QImage.Format_ARGB32)
-                image.fill(Qt.transparent)
-                painter = QPainter(image)
-                chart_view.render(painter)
-                painter.end()
-                filename = f"wetter_chart_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-                if image.save(filename, "PNG"):
-                    print(f"Chart gespeichert: {filename}")
+            self.view.grab().save(f"wetter_chart_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
         else:
             super().keyPressEvent(event)
 
