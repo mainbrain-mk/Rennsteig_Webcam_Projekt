@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-import time
+from datetime import datetime
 from io import BytesIO
 
 from telegram import Bot
@@ -54,38 +54,32 @@ async def telegram_loop(viewer):
         await send_current_viewer_image(viewer)
     """
 
-    while True:
+    try:
+        # Aktuelle Zeit holen
+        now = datetime.now()
 
-        # 1. Reguläre Wartezeit bis zur nächsten vollen Stunde (+ 1 Minute)
-        now = time.localtime()
-        seconds_until_next = (60 - now.tm_min) * 60 - now.tm_sec + 60
-        if seconds_until_next <= 0:
-            seconds_until_next += 3600
+        # Berechne die Minuten bis zum nächsten 15er Intervall
+        # Beispiel: 12:04 -> nächstes ist 12:15 (11 Min warten)
+        # Beispiel: 12:55 -> nächstes ist 13:00 (5 Min warten)
+        minutes_to_next_quarter = 15 - (now.minute % 15)
 
-        logger.info(f"Telegram: Nächster regulärer Versand in {seconds_until_next} Sekunden.")
-        await asyncio.sleep(seconds_until_next)
+        # Zielzeit: Jetzt + Differenz, Sekunden auf 0, plus 5 Sek Puffer
+        # Der Puffer sorgt dafür, dass wir sicher im neuen Intervall landen
+        wait_seconds = (minutes_to_next_quarter * 60) - now.second + 5
 
-        # 2. Regulärer Versand-Prozess
-        if viewer.last_raw_image is None:
-            continue
+        if wait_seconds <= 0:  # Falls wir extrem nah dran sind
+            wait_seconds = 15 * 60
 
-        try:
-            img = viewer.get_current_image()
+        logger.info(f"Nächster Telegram-Versand in {wait_seconds // 60} Min {wait_seconds % 60} Sek.")
 
-            # Wetterdaten aus dem viewer extrahieren
-            # last_weather_formatted ist ein Dict, das wir in webcam_viewer.py befüllen
-            w = viewer.last_weather_formatted or {}
+        await asyncio.sleep(wait_seconds)
 
-            # Werte auslesen (mit Fallback '--' falls Daten fehlen)
-            temp = w.get('temp', '--')
-            wind = w.get('wind_speed') or w.get('wind', '--')
+        # Bild senden
+        await send_current_viewer_image(viewer)
 
-            # Caption zusammenbauen
-            caption_text = f"🌡 Temperatur: {temp}\n💨 {wind} "
-
-            await send_telegram_photo(img, caption=caption_text)
-        except Exception as e:
-            logger.error(f"Telegram: Fehler beim regulären Overlay-Versand: {e}")
+    except Exception as e:
+        logger.error(f"Fehler in der Telegram-Loop: {e}")
+        await asyncio.sleep(60)  # Bei Fehler eine Minute warten und neu versuchen
 
 async def send_current_viewer_image(viewer):
     """Holt das aktuelle Bild aus dem Viewer und sendet es sofort."""
