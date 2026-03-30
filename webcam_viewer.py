@@ -98,6 +98,18 @@ class WebcamViewer(QWidget):
         # 4. Klick-Bereich des Buttons anpassen
         self.update_button_geometry(scaled_pixmap)
 
+    def show_waiting_message(self, text):
+        """Zeigt einen Hinweistext im Hauptlabel an, wenn kein Bild verfügbar ist."""
+        self.label_image.setText(text)
+        # Styling: Weißer Text, groß, fett, auf schwarzem Grund
+        self.label_image.setStyleSheet("""
+            color: white; 
+            font-size: 28px; 
+            font-weight: bold; 
+            background-color: black;
+        """)
+        self.label_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
     def update_button_geometry(self, scaled_pixmap):
         """Berechnet die Button-Position basierend auf der aktuellen Skalierung."""
         scale = scaled_pixmap.width() / ORIG_W
@@ -131,7 +143,7 @@ class WebcamViewer(QWidget):
                         img_data = await resp.read()
                         self.last_raw_image = Image.open(BytesIO(img_data))
                         self.update_display()
-                        logger.info(f"Webcam-Bild geladen um {datetime.now().strftime('%H:%M:%S')}")
+                        logger.debug(f"Webcam-Bild geladen um {datetime.now().strftime('%H:%M:%S')}")
                         return True
             except Exception as e:
                 logger.error(f"Fehler beim Webcam-Download: {e}")
@@ -140,6 +152,8 @@ class WebcamViewer(QWidget):
         async with aiohttp.ClientSession() as session:
             # 1. Sofortiger Versuch beim ersten Start
             await _download(session)
+            if not hasattr(self, 'last_raw_image') or self.last_raw_image is None:
+                self.show_waiting_message("Warte auf Daten...")
 
             # 2. Endlosschleife für die Synchronisation
             while True:
