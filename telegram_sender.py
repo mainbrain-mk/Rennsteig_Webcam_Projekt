@@ -34,7 +34,7 @@ async def send_telegram_photo(img_pil, caption=""):
             photo=bio,
             caption=caption
         )
-        logger.info("Telegram-Bild erfolgreich gesendet.")
+        logger.debug("Telegram-Bild erfolgreich gesendet.")
     except Exception as e:
         logger.error(f"Telegram-Versand fehlgeschlagen: {e}")
 
