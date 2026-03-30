@@ -19,7 +19,7 @@ from config import (
     OVERLAY_ORIG_X, OVERLAY_ORIG_Y, OVERLAY_ORIG_W, OVERLAY_ORIG_H
 )
 from overlay import draw_overlay
-from weather import fetch_weather, format_weather, compute_next_wait_seconds
+from weather import WeatherService
 from database import save_weather_to_db
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,7 @@ class WebcamViewer(QWidget):
         # Daten-Speicher
         self.last_raw_image = None
         self.last_weather_formatted = None
+        self.weather_service = WeatherService()
 
         # Der transparente Button (RGBA: 0,0,0,0 für 100% Transparenz)
         self.logo_button = QPushButton(self)
@@ -161,41 +162,41 @@ class WebcamViewer(QWidget):
                 await asyncio.sleep(1)
 
     async def update_weather_loop(self):
-        """Holt Wetterdaten, speichert sie in der DB und aktualisiert das UI."""
-        logger.info("Wetter-Loop gestartet.")
+        """Holt Wetterdaten über den WeatherService, speichert sie und aktualisiert das UI."""
+        logger.info("Wetter-Loop (Service-basiert) gestartet.")
 
         while True:
             try:
-                # 1. Daten von der API abrufen
-                data = await fetch_weather()
+                # 1. Daten über die Klasse abrufen und intern verarbeiten
+                success = await self.weather_service.update()
 
-                if data is not None:
-                    # 2. Erfolgsfall: In Datenbank speichern
+                if success:
+                    # 2. In Datenbank speichern (Rohdaten liegen im Objekt)
                     try:
-                        save_weather_to_db(data)
+                        save_weather_to_db(self.weather_service.raw_data)
                         logger.debug("Wetterdaten erfolgreich in Datenbank gespeichert.")
                     except Exception as db_e:
                         logger.error(f"Fehler beim Speichern in die Datenbank: {db_e}")
 
-                    # 3. Daten für das UI formatieren
-                    self.last_weather_formatted = format_weather(data)
+                    # 3. Formatierte Daten für das UI übernehmen
+                    self.last_weather_formatted = self.weather_service.formatted_data
                     self.update_display()  # UI-Refresh triggern
 
-                    # 4. Reguläre Wartezeit berechnen (ca. 300s)
-                    wait_time = compute_next_wait_seconds(data)
-                    logger.info(f"Wetter aktualisiert. Nächster Check in {wait_time:.0f}s.")
+                    # 4. Wartezeit direkt vom Objekt berechnen lassen
+                    wait_time = self.weather_service.compute_next_wait_seconds()
+                    logger.info(f"Wetter aktualisiert. Nächster Check in {int(wait_time)}s.")
 
                 else:
-                    # 5. Fehlerfall (fetch_weather hat bereits geloggt)
-                    wait_time = 10.0
+                    # Fehlerfall: Kurze Wartezeit vor Retry
+                    wait_time = 30.0
                     logger.warning(f"Retry-Modus: Nächster Versuch in {wait_time} Sekunden...")
 
             except Exception as e:
-                # Sicherheitsnetz für unerwartete Fehler (z.B. Formatierungsfehler)
-                wait_time = 10.0
+                # Sicherheitsnetz für unerwartete Fehler
                 logger.error(f"Unerwarteter Fehler in der Wetter-Schleife: {e}")
+                wait_time = 60.0
 
-            # 6. Schlafen bis zum nächsten Intervall
+            # 5. Schlafen bis zum nächsten Intervall
             await asyncio.sleep(wait_time)
 
     def get_current_image(self):

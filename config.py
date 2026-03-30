@@ -13,7 +13,7 @@ URL_WEATHER = (
     f"latitude={LAT}&longitude={LON}"
     "&current=temperature_2m,relative_humidity_2m,apparent_temperature,"
     "is_day,wind_speed_10m,wind_direction_10m,wind_gusts_10m,"
-    "precipitation,weather_code,cloud_cover,pressure_msl"
+    "precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl"
     "&timezone=auto"
 )
 
