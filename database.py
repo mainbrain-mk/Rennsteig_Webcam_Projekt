@@ -27,7 +27,8 @@ def init_db():
                 snowfall REAL,
                 weather_code INTEGER,
                 cloud_cover INTEGER,
-                pressure REAL
+                pressure REAL,
+                is_day BOOLEAN
             )
         """)
         conn.commit()
