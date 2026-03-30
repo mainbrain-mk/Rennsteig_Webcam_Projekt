@@ -65,7 +65,7 @@ async def telegram_loop(viewer):
 
         # Zielzeit: Jetzt + Differenz, Sekunden auf 0, plus 5 Sek Puffer
         # Der Puffer sorgt dafür, dass wir sicher im neuen Intervall landen
-        wait_seconds = (minutes_to_next_quarter * 60) - now.second + 5
+        wait_seconds = ((minutes_to_next_quarter + 1) * 60) - now.second
 
         if wait_seconds <= 0:  # Falls wir extrem nah dran sind
             wait_seconds = 15 * 60
