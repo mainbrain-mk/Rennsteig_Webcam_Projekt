@@ -36,8 +36,9 @@ class WebcamViewer(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
 
         # Das Bild-Label zur Anzeige
-        self.label_image = QLabel()
+        self.label_image = QLabel("Warte auf Daten / Lade Webcam...")
         self.label_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.label_image.setStyleSheet("color: white; font-size: 20px; font-weight: bold;")  # Optionales Styling
         self.layout.addWidget(self.label_image)
 
         # Daten-Speicher
@@ -152,8 +153,6 @@ class WebcamViewer(QWidget):
         async with aiohttp.ClientSession() as session:
             # 1. Sofortiger Versuch beim ersten Start
             await _download(session)
-            if not hasattr(self, 'last_raw_image') or self.last_raw_image is None:
-                self.show_waiting_message("Warte auf Daten...")
 
             # 2. Endlosschleife für die Synchronisation
             while True:
