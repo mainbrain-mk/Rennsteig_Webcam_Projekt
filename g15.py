@@ -9,6 +9,12 @@ keep_running = True
 
 last_update_time = "update: --:--"
 
+try:
+    pynvml.nvmlInit()
+    nvml_available = True
+except:
+    nvml_available = False
+
 def get_cpu_temp():
     temps = psutil.sensors_temperatures()
     if 'coretemp' in temps:
@@ -20,11 +26,15 @@ def get_cpu_temp():
     return 0.0
 
 def get_gpu_temp_nvidia():
-    pynvml.nvmlInit()
-    handle = pynvml.nvmlDeviceGetHandleByIndex(0) # Erste GPU
-    temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+    if not nvml_available:
+        return 0.0
+    try:
+        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+        return pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+    except:
+        return 0.0
+def shut_down():
     pynvml.nvmlShutdown()
-    return temp
 
 def last_update(update="--:--"):
     global last_update_time

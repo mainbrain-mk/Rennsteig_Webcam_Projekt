@@ -58,7 +58,7 @@ async def main_async():
     finally:
         import g15
         g15.keep_running = False  # Signalisiert dem Thread, aufzuhören
-
+        g15.shut_down()
         logger.info("Beende Hintergrund-Tasks...")
 
         # 1. Alle laufenden Tasks sammeln
