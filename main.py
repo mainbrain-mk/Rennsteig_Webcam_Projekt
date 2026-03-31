@@ -1,6 +1,7 @@
 import sys
 import asyncio
 import logging
+import threading
 from PySide6.QtWidgets import QApplication
 from qasync import QEventLoop
 
@@ -8,6 +9,7 @@ from webcam_viewer import WebcamViewer
 from database import init_db
 from supervisor import supervisor
 from telegram_sender import telegram_loop, telegram_enabled
+from g15 import g15_live_clock
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,6 +33,10 @@ async def main_async():
     async def setup_tasks():
         try:
             await asyncio.sleep(0.1)
+
+            loop.run_in_executor(None, g15_live_clock)
+            logger.info("G15-Thread wurde gestartet.")
+
             # Wir speichern die Tasks nicht einzeln, da wir sie später über asyncio.all_tasks() finden
             loop.create_task(supervisor(viewer.update_webcam_loop, "Webcam"))
             loop.create_task(supervisor(viewer.update_weather_loop, "Wetter"))
@@ -50,6 +56,9 @@ async def main_async():
     except Exception as e:
         logger.error(f"Main Loop Fehler: {e}")
     finally:
+        import g15
+        g15.keep_running = False  # Signalisiert dem Thread, aufzuhören
+
         logger.info("Beende Hintergrund-Tasks...")
 
         # 1. Alle laufenden Tasks sammeln
