@@ -1,9 +1,14 @@
+import logging
+
 import usb.core
 import usb.util
 import time
 import psutil
 import pynvml
 from PIL import Image, ImageDraw, ImageFont
+
+# Logger für dieses Modul konfigurieren
+logger = logging.getLogger(__name__)
 
 keep_running = True
 
@@ -56,7 +61,7 @@ def g15_live_clock():
         pass
     dev.set_configuration()
 
-    print("Starte Live-Uhr auf dem G15 Display... (Strg+C zum Beenden)")
+    logger.info("Starte Live-Uhr auf dem G15 Display...")
 
     try:
         font_t = ImageFont.truetype("/usr/share/fonts/truetype/terminus/TerminusTTF-4.46.0.ttf", 16)
