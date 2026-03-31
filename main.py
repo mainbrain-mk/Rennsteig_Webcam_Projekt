@@ -1,3 +1,4 @@
+import signal
 import sys
 import asyncio
 import logging
@@ -24,6 +25,21 @@ async def main_async():
     app = QApplication(sys.argv)
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
+
+    # --- NEU: Signal-Handling hinzufügen ---
+    def stop_app():
+        logger.info("Signal empfangen, schließe Anwendung...")
+        app.quit()  # Beendet die Qt-Eventloop sauber
+
+    # SIGINT (Strg+C / Restart in PyCharm) und SIGTERM registrieren
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            # Unter Unix/Linux (Kubuntu) nutzen wir die Loop-eigene Methode
+            loop.add_signal_handler(sig, stop_app)
+        except NotImplementedError:
+            # Fallback für Windows, falls du mal wechselst
+            signal.signal(sig, lambda *args: stop_app())
+    # ----------------------------------------
 
     viewer = WebcamViewer()
     viewer.resize(1920, 1080)
