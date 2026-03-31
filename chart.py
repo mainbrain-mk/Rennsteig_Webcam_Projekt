@@ -6,7 +6,7 @@ import pytz
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, QDateTime, QMargins, QTimeZone
 from PySide6.QtCharts import QChart, QChartView, QLineSeries, QDateTimeAxis, QValueAxis, QScatterSeries
-from PySide6.QtGui import QPainter, QColor, QPen, QImage, QPainterPath, QBrush, QLinearGradient, QGradient
+from PySide6.QtGui import QPainter, QColor, QPen, QImage, QPainterPath, QBrush, QLinearGradient, QGradient, QFont
 
 from database import load_last_7_days
 
@@ -40,9 +40,14 @@ class ChartDialog(QDialog):
         self.chart.setBackgroundVisible(True)
 
         # Titel-Farbe auf Weiß (damit man ihn auf dem Blau sieht)
-        self.chart.setTitleBrush(QBrush(QColor("white")))
+        font = QFont()
+        font.setPointSize(18)  # Hier die gewünschte Größe in Punkt (pt)
+        font.setBold(True)  # Optional: Fett drucken
+        #font.setFamily("Arial")  # Optional: Schriftart festlegen
 
         self.chart.setTitle("Wetterdaten der letzten 7 Tage")
+        self.chart.setTitleFont(font)
+        self.chart.setTitleBrush(QBrush(QColor("white")))
 
         self.chart.setMargins(QMargins(15, 10, 15, 60))
         self.chart.layout().setContentsMargins(0, 0, 0, 0)
