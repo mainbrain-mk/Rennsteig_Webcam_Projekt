@@ -216,6 +216,25 @@ def draw_overlay(img, weather_info: dict):
     # --- Höhe links unten im Overlay ---
     elevation_text = w.get("elevation", "-- m ü. NHN")
 
+    # Sonnenaufgang
+    sunrise_dt = w.get("sunrise")
+    sunrise_str = sunrise_dt.strftime('%H:%M') if sunrise_dt else "--:--"
+
+    # Sonnenuntergang
+    sunset_dt = w.get("sunset")
+    sunset_str = sunset_dt.strftime('%H:%M') if sunset_dt else "--:--"
+
+    # Kombinierter String mit Emojis
+    sun_info = f"  ▲ {sunrise_str}   ▼ {sunset_str}"
+
+
+
+    # 1. Emoji-Font laden (für farbige Darstellung)
+    try:
+        f_emoji_small = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf", 22)
+    except:
+        f_emoji_small = f_details
+
     # Position: OX + kleiner Puffer, OY + Boxhöhe - kleiner Puffer
     # Wir setzen es etwa 20 Pixel vom linken und unteren Rand der Box entfernt
     elev_x = OX + 25
@@ -225,9 +244,10 @@ def draw_overlay(img, weather_info: dict):
     bbox = draw.textbbox((0, 0), station_text, font=f_header)
     draw.text((OX + OW - (bbox[2] - bbox[0]) - 30, elev_y), station_text, fill="white", font=f_header)
     draw.text((OX + OW - (bbox[2] - bbox[0]) - 30, elev_y - bbox[1] - 18), elevation_text, fill="white", font=f_small)
+    draw.text((OX + OW - (bbox[2] - bbox[0]) + 160, elev_y - bbox[1] - 18), sun_info, font=f_small, embedded_color=True)
 
     dt = w.get("datetime")
     time_str = dt.strftime('%H:%M') if dt else "--:--"
     draw.text((OX + 30, elev_y), time_str, fill="white", font=f_header)
-    draw.text((OX + 30, elev_y - bbox[1] - 18), "last weather update:", fill="white", font=f_small)
+    draw.text((OX + 30, elev_y - bbox[1] - 18), "letztes Wetter Update:", fill="white", font=f_small)
     return img
