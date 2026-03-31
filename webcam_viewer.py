@@ -1,6 +1,7 @@
 import asyncio
 import logging
-from datetime import datetime
+import traceback
+from datetime import datetime, timedelta
 from io import BytesIO
 import aiohttp
 import pytz
@@ -9,7 +10,7 @@ from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtCore import Qt, Slot, QRect
 from PIL import Image
 from astral import LocationInfo, Observer
-from astral.sun import sun
+from astral.sun import sun, midnight
 from chart import show_chart
 
 # Deine bestehenden Module
@@ -65,16 +66,23 @@ class WebcamViewer(QWidget):
 
             #city.observer.elevation = self.last_weather_formatted.get("elevation_num")
             custom_observer = Observer(LAT, LON, self.last_weather_formatted.get("elevation_num"))
+            city = LocationInfo("Rennsteig", "Germany", "Europe/Berlin", LAT, LON)
             s = sun(custom_observer, date=datetime.now(), tzinfo=pytz.timezone("Europe/Berlin"))
-            logger.info(f"observer: {custom_observer}, elev: { self.last_weather_formatted.get("elevation_num")}")
+            logger.debug(f"observer: {custom_observer}, elev: { self.last_weather_formatted.get("elevation_num")}")
 
             # Zeiten zum Wetter-Dictionary hinzufügen
             w_data = self.last_weather_formatted.copy() if self.last_weather_formatted else {}
             w_data['sunrise'] = s['sunrise']
             w_data['sunset'] = s['sunset']
             w_data['noon'] = s['noon']
+            w_data['midnight'] = midnight(custom_observer, date=datetime.now(), tzinfo=pytz.timezone("Europe/Berlin"))
+            w_data['next_midnight'] = midnight(custom_observer, date=datetime.now() + timedelta(days=1), tzinfo=pytz.timezone("Europe/Berlin"))
+            w_data['dawn'] = s['dawn']
+            w_data['dusk'] = s['dusk']
             w_data['now'] = datetime.now(pytz.timezone("Europe/Berlin"))
+
         except Exception as e:
+            traceback.print_exc()
             logger.error(f"Fehler bei Sonnenstandsberechnung: {e}")
             w_data = self.last_weather_formatted
         return w_data

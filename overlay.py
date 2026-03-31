@@ -5,7 +5,7 @@ from PIL import ImageDraw, ImageFont, Image
 
 # Logger für dieses Modul konfigurieren
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.DEBUG)
 
 def load_font(size, bold=False):
     try:
@@ -46,55 +46,71 @@ def lerp_color(c1, c2, t):
     return tuple(int(c1[i] + (c2[i] - c1[i]) * t) for i in range(3))
 
 def get_dynamic_color(w: dict):
-    """Berechnet einen fließenden Farbübergang basierend auf dem Sonnenstand."""
+    """Berechnet einen fließenden Farbübergang basierend auf dem vollen Sonnenzyklus."""
     now = w.get('now')
+    dawn = w.get('dawn')
     sunrise = w.get('sunrise')
-    sunset = w.get('sunset')
     noon = w.get('noon')
+    sunset = w.get('sunset')
+    dusk = w.get('dusk')
+    midnight = w.get('midnight')
+    next_midnight = w.get('next_midnight')
 
-    # Fallback, falls Daten fehlen (z.B. beim ersten Start)
-    if not all([now, sunrise, sunset, noon]):
+    logger.debug(f"now: {now}, dawn: {dawn}, sunrise: {sunrise}, noon: {noon}, "
+                f"sunset: {sunset}, dusk: {dusk}, midnight: {midnight}, next_midnight: {next_midnight}")
+
+    # Basis-Check (ohne Mitternacht, falls die mal fehlt)
+    if not all([now, dawn, sunrise, noon, sunset, dusk]):
         return (0, 175, 255)
 
-    # Deine definierten Farbpunkte (RGB)
-    color_night   = (40, 0, 20)    # Nacht / Dunkelrot-Schwarz
-    color_sunrise = (0, 255, 255)  # Sonnenaufgang (Türkis)
-    color_noon    = (0, 175, 255)  # Mittags (Helles Blau)
-    color_sunset  = (60, 0, 90)    # Sonnenuntergang (Violett)
+    # Definierte Farbpunkte
+    color_midnight = (5, 5, 20)      # Tiefste Nacht (fast Schwarz-Blau)
+    color_dawn     = (100, 50, 100)  # Dämmerung (Violett/Rosa)
+    color_sunrise  = (0, 255, 255)   # Sonnenaufgang (Türkis/Cyan)
+    color_noon     = (0, 175, 255)   # Mittags (Helles Blau)
+    color_sunset   = (255, 100, 0)   # Sonnenuntergang (Warmes Orange/Gold)
+    color_dusk     = (60, 0, 90)     # Späte Dämmerung (Dunkelviolett)
 
-    # Hilfsfunktion zur Berechnung des Fortschritts (0.0 bis 1.0)
     def get_t(start, end, current):
         total = (end - start).total_seconds()
+        if total <= 0: return 0.0
         elapsed = (current - start).total_seconds()
         return max(0.0, min(1.0, elapsed / total))
 
-    # --- Phasen-Logik ---
+    # --- Die vollständige Zyklus-Logik ---
 
-    # 1. Nacht zu Sonnenaufgang (Übergang beginnt 2h vor Aufgang)
-    if now < sunrise:
-        fade_start = sunrise - timedelta(hours=2)
-        if now < fade_start:
-            return color_night
-        t = get_t(fade_start, sunrise, now)
-        return lerp_color(color_night, color_sunrise, t)
+    # 1. Von Mitternacht (heute Morgen) bis zum Morgengrauen (Dawn)
+    if midnight and now <= dawn:
+        # Wir blenden von der tiefsten Nacht langsam zum Dämmerungsviolett auf
+        t = get_t(midnight, dawn, now)
+        return lerp_color(color_midnight, color_dawn, t)
 
-    # 2. Vormittag (Sonnenaufgang bis Mittag)
-    elif sunrise <= now <= noon:
+    # 2. Dämmerung (Dawn) bis Sonnenaufgang (Sunrise)
+    elif dawn < now <= sunrise:
+        t = get_t(dawn, sunrise, now)
+        return lerp_color(color_dawn, color_sunrise, t)
+
+    # 3. Vormittag (Sunrise bis Noon)
+    elif sunrise < now <= noon:
         t = get_t(sunrise, noon, now)
         return lerp_color(color_sunrise, color_noon, t)
 
-    # 3. Nachmittag (Mittag bis Sonnenuntergang)
+    # 4. Nachmittag (Noon bis Sunset)
     elif noon < now <= sunset:
         t = get_t(noon, sunset, now)
         return lerp_color(color_noon, color_sunset, t)
 
-    # 4. Abend (Sonnenuntergang bis Nacht, Übergang dauert 2h)
+    # 5. Abenddämmerung (Sunset bis Dusk)
+    elif sunset < now <= dusk:
+        t = get_t(sunset, dusk, now)
+        return lerp_color(color_sunset, color_dusk, t)
+
+    # 6. Von Dusk bis zur nächsten Mitternacht (morgen früh)
     else:
-        fade_end = sunset + timedelta(hours=2)
-        if now > fade_end:
-            return color_night
-        t = get_t(sunset, fade_end, now)
-        return lerp_color(color_sunset, color_night, t)
+        # Wenn next_midnight fehlt, nehmen wir einen 2h-Fallback
+        target = next_midnight if next_midnight else (dusk + timedelta(hours=2))
+        t = get_t(dusk, target, now)
+        return lerp_color(color_dusk, color_midnight, t)
 
 def draw_overlay(img, weather_info: dict):
     draw = ImageDraw.Draw(img)
