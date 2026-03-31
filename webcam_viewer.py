@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout
 from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtCore import Qt, Slot, QRect
 from PIL import Image
-from astral import LocationInfo
+from astral import LocationInfo, Observer
 from astral.sun import sun
 from chart import show_chart
 
@@ -59,17 +59,14 @@ class WebcamViewer(QWidget):
         """Wird ausgelöst, wenn auf das Wetter-Overlay geklickt wird."""
         logger.info("Öffne Wetter-Chart...")
         show_chart(self)
-
-    def update_display(self):
-        """Rendert das Overlay auf das Original und skaliert das Ergebnis."""
-        if self.last_raw_image is None:
-            return
-
-        # 1. Overlay auf das Bild in voller Größe zeichnen
+    def sunrise_sunset(self):
         try:
             from config import LAT, LON
-            city = LocationInfo("Rennsteig", "Germany", "Europe/Berlin", LAT, LON)
-            s = sun(city.observer, date=datetime.now(), tzinfo=pytz.timezone("Europe/Berlin"))
+
+            #city.observer.elevation = self.last_weather_formatted.get("elevation_num")
+            custom_observer = Observer(LAT, LON, self.last_weather_formatted.get("elevation_num"))
+            s = sun(custom_observer, date=datetime.now(), tzinfo=pytz.timezone("Europe/Berlin"))
+            logger.info(f"observer: {custom_observer}, elev: { self.last_weather_formatted.get("elevation_num")}")
 
             # Zeiten zum Wetter-Dictionary hinzufügen
             w_data = self.last_weather_formatted.copy() if self.last_weather_formatted else {}
@@ -80,6 +77,15 @@ class WebcamViewer(QWidget):
         except Exception as e:
             logger.error(f"Fehler bei Sonnenstandsberechnung: {e}")
             w_data = self.last_weather_formatted
+        return w_data
+
+    def update_display(self):
+        """Rendert das Overlay auf das Original und skaliert das Ergebnis."""
+        if self.last_raw_image is None:
+            return
+
+        # 1. Overlay auf das Bild in voller Größe zeichnen
+        w_data = self.sunrise_sunset()
 
         full_img = self.last_raw_image.copy()
         full_img = draw_overlay(full_img, w_data)
@@ -223,20 +229,8 @@ class WebcamViewer(QWidget):
         """Schnittstelle für den Telegram-Sender."""
         if self.last_raw_image is None:
             return None
-        try:
-            from config import LAT, LON
-            city = LocationInfo("Rennsteig", "Germany", "Europe/Berlin", LAT, LON)
-            s = sun(city.observer, date=datetime.now(), tzinfo=pytz.timezone("Europe/Berlin"))
 
-            # Zeiten zum Wetter-Dictionary hinzufügen
-            w_data = self.last_weather_formatted.copy() if self.last_weather_formatted else {}
-            w_data['sunrise'] = s['sunrise']
-            w_data['sunset'] = s['sunset']
-            w_data['noon'] = s['noon']
-            w_data['now'] = datetime.now(pytz.timezone("Europe/Berlin"))
-        except Exception as e:
-            logger.error(f"Fehler bei Sonnenstandsberechnung: {e}")
-            w_data = self.last_weather_formatted
+        w_data = self.sunrise_sunset()
 
         return draw_overlay(self.last_raw_image.copy(), w_data)
 

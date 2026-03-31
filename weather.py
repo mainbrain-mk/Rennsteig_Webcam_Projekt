@@ -76,6 +76,7 @@ class WeatherService:
             "datetime_utc": dt_utc,
             "icon": icon,
             "text": text,
+            "elevation_num": elevation,
             "elevation": f"{int(elevation)} m ü. NHN",
             "temp": f"{temp:.1f} °C" if temp is not None else "-- °C",
             "feels": f"Gefühlt {feels:.1f} °C" if feels is not None else "Gefühlt -- °C",
