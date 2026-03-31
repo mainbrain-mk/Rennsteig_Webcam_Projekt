@@ -100,7 +100,7 @@ async def send_current_viewer_image(viewer):
         wind = w.get('wind', '--')
 
         # Caption zusammenbauen
-        caption_text = f"🌡 Temperatur: {temp}\n💨 Wind: {wind} km/h"
+        caption_text = f"🌡 Temperatur: {temp}\n💨 {wind}"
 
         await send_telegram_photo(img, caption=caption_text)
 
