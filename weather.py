@@ -89,7 +89,8 @@ class WeatherService:
             "raw_code": code
         }
 
-    def _get_wmo_info(self, code: int, is_day: int) -> tuple:
+    @staticmethod
+    def _get_wmo_info(code: int, is_day: int) -> tuple:
         """Übersetzt WMO-Wettercodes in Symbole und Beschreibungen."""
         if code == 0:
             return ("☀️", "Klarer Himmel") if is_day else ("✨", "Sternenklar")

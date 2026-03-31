@@ -10,12 +10,11 @@ from PySide6.QtCore import Qt, Slot, QRect
 from PIL import Image
 from astral import LocationInfo
 from astral.sun import sun
-
 from chart import show_chart
 
 # Deine bestehenden Module
 from config import (
-    URL_WEBCAM, ORIG_W, ORIG_H,
+    URL_WEBCAM, ORIG_W,
     OVERLAY_ORIG_X, OVERLAY_ORIG_Y, OVERLAY_ORIG_W, OVERLAY_ORIG_H
 )
 from overlay import draw_overlay

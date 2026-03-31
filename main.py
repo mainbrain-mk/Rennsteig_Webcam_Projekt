@@ -1,7 +1,6 @@
 import sys
 import asyncio
 import logging
-import threading
 from PySide6.QtWidgets import QApplication
 from qasync import QEventLoop
 
