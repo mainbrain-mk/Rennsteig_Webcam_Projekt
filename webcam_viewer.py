@@ -22,6 +22,8 @@ from overlay import draw_overlay
 from weather import WeatherService
 from database import save_weather_to_db
 
+import g15
+
 logger = logging.getLogger(__name__)
 
 
@@ -193,11 +195,17 @@ class WebcamViewer(QWidget):
 
                     # 3. Formatierte Daten für das UI übernehmen
                     self.last_weather_formatted = self.weather_service.formatted_data
+                    # --- NEU: Zeit an G15 übergeben ---
+                    dt = self.last_weather_formatted.get("datetime")
+                    time_str = dt.strftime('%H:%M') if dt else "--:--"
+                    g15.last_update(time_str)
                     self.update_display()  # UI-Refresh triggern
 
                     # 4. Wartezeit direkt vom Objekt berechnen lassen
                     wait_time = self.weather_service.compute_next_wait_seconds()
                     logger.info(f"Wetter aktualisiert. Nächster Check in {int(wait_time)}s.")
+
+
 
                 else:
                     # Fehlerfall: Kurze Wartezeit vor Retry

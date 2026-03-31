@@ -7,6 +7,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 keep_running = True
 
+last_update_time = "update: --:--"
+
 def get_cpu_temp():
     temps = psutil.sensors_temperatures()
     if 'coretemp' in temps:
@@ -23,6 +25,10 @@ def get_gpu_temp_nvidia():
     temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
     pynvml.nvmlShutdown()
     return temp
+
+def last_update(update="--:--"):
+    global last_update_time
+    last_update_time = f"upd: {update}"
 
 def g15_live_clock():
     global keep_running
@@ -65,6 +71,7 @@ def g15_live_clock():
 
             draw.text((80, 0), temp_text_cpu, font=font_d, fill=0)
             draw.text((80, 12), temp_text_gpu, font=font_d, fill=0)
+            draw.text((80, 26), last_update_time, font=font_d, fill=0)
 
             # Rahmen zur Kontrolle, ob das Alignment noch stimmt
             #draw.rectangle([0, 0, 159, 42], outline=0)
