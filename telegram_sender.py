@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import BytesIO
 
 from telegram import Bot
@@ -10,11 +10,11 @@ from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 
 logger = logging.getLogger(__name__)
 
+next_send = datetime.now()
 
 def telegram_enabled():
     """Prüft, ob Telegram korrekt konfiguriert ist."""
     return bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)
-
 
 async def send_telegram_photo(img_pil, caption=""):
     """Sendet ein PIL-Bild direkt an Telegram."""
@@ -29,30 +29,28 @@ async def send_telegram_photo(img_pil, caption=""):
     bio.seek(0)
 
     try:
-        await bot.send_photo(
+        pic_send = await bot.send_photo(
             chat_id=TELEGRAM_CHAT_ID,
             photo=bio,
             caption=caption
         )
-        logger.debug("Telegram-Bild erfolgreich gesendet.")
+        if pic_send and pic_send.message_id:
+            logger.debug(f"Telegram-Bild erfolgreich gesendet (ID: {pic_send.message_id})")
+            return True
     except Exception as e:
         logger.error(f"Telegram-Versand fehlgeschlagen: {e}")
 
+    return False
 
 async def telegram_loop(viewer):
+    global next_send
     """
-    Sendet das erste Bild sofort nach Programmstart und danach
-    jeweils 1 Minute nach der vollen Stunde.
+    sendet ein bild in Minute 01, 16, 31, 46
     """
+
     if not telegram_enabled():
         logger.info("Telegram deaktiviert – Loop wird nicht gestartet.")
         return
-
-    """
-    await asyncio.sleep(5)
-    if viewer.last_raw_image is not None:
-        await send_current_viewer_image(viewer)
-    """
 
     try:
         # Aktuelle Zeit holen
@@ -69,6 +67,8 @@ async def telegram_loop(viewer):
 
         if wait_seconds <= 0:  # Falls wir extrem nah dran sind
             wait_seconds = 15 * 60
+
+        next_send = now + timedelta(seconds=wait_seconds)
 
         logger.info(f"Nächster Telegram-Versand in {wait_seconds // 60} Min {wait_seconds % 60} Sek.")
 
@@ -102,7 +102,8 @@ async def send_current_viewer_image(viewer):
         # Caption zusammenbauen
         caption_text = f"🌡 Temperatur: {temp}\n💨 {wind}"
 
-        await send_telegram_photo(img, caption=caption_text)
+        return await send_telegram_photo(img, caption=caption_text)
 
     except Exception as e:
         logger.error(f"Fehler beim manuellen Telegram-Versand: {e}")
+        return False
