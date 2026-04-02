@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 import pytz
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel
-from PySide6.QtCore import Qt, QDateTime, QMargins
+from PySide6.QtCore import Qt, QDateTime, QMargins, QRectF
 from PySide6.QtCharts import QChart, QChartView, QLineSeries, QDateTimeAxis, QValueAxis, QScatterSeries
 from PySide6.QtGui import QPainter, QColor, QPen, QImage, QPainterPath, QBrush, QLinearGradient, QGradient, QFont
 
@@ -14,10 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 class ChartDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, live_mode=False):
         super().__init__(parent)
         self.setWindowTitle("Wetterverlauf Rennsteigbahn")
-        self.resize(1280, 720)
+        self.live_mode = live_mode
+
         layout = QVBoxLayout(self)
 
         rows = load_last_7_days()
@@ -36,8 +37,8 @@ class ChartDialog(QDialog):
         self.update_chart_background()
 
         # Den äußeren Hintergrund des Chart-Widgets transparent lassen
-        self.chart.setPlotAreaBackgroundVisible(False)
-        self.chart.setBackgroundVisible(True)
+        #self.chart.setPlotAreaBackgroundVisible(False)
+        #self.chart.setBackgroundVisible(True)
 
         # Titel-Farbe auf Weiß (damit man ihn auf dem Blau sieht)
         font = QFont()
@@ -235,6 +236,98 @@ class ChartDialog(QDialog):
 
             logger.debug(f"green_col: {green_col}, blue_col: {blue_col}")
 
+        self.update_ui_mode()
+
+
+    def update_ui_mode(self):
+        """Passt die UI-Elemente dynamisch an den Live-Modus an oder ab."""
+        has_axes = hasattr(self, 'axis_x') and hasattr(self, 'axis_y_temp') and hasattr(self, 'axis_y_wind')
+        if self.live_mode:
+            # Deine gewünschte Export-Größe
+            width, height = 720, 320
+            self.resize(width, height)
+
+            self.chart.setBackgroundVisible(False)
+            self.chart.setPlotAreaBackgroundVisible(False)
+
+            # 1. Das Layout-Management von Qt Charts minimieren
+            self.chart.layout().setContentsMargins(0, 0, 0, 0)
+
+            # 2. Die Margins des Charts auf 0 setzen.
+            # Falls die Linien immer noch zu klein sind, kann man hier
+            # sogar negative Werte probieren (z.B. -10), um den Weißraum zu killen.
+            self.chart.setMargins(QMargins(0, 0, 0, 0))
+
+            # 3. Den Bereich, in dem gezeichnet wird, maximieren
+            # Wir lassen oben nur 20px Platz für die Legende
+            self.chart.setPlotArea(QRectF(0, 40, width, height-40))
+
+            if self.chart.legend():
+                self.chart.legend().show()
+
+                # 1. WICHTIG: Horizontal ausrichten statt untereinander
+                self.chart.legend().setAlignment(Qt.AlignmentFlag.AlignTop)
+                self.chart.legend().layout().setContentsMargins(10, 0, 10, 0)
+
+                # 2. Die Box für die Legende über die fast volle Breite ziehen (z.B. 700px)
+                # Damit haben beide Labels (Temperatur & Wind) nebeneinander Platz
+                self.chart.legend().setGeometry(QRectF(0, 5, width, 30))
+
+                # Schrift-Setup (Weiß und Fett)
+                font = self.chart.legend().font()
+                font.setPointSize(10)
+                font.setBold(True)
+                self.chart.legend().setFont(font)
+                self.chart.legend().setLabelColor(QColor("white"))
+
+            self.chart.setTitle("")
+
+            if has_axes:
+                self.axis_x.setLabelsVisible(False)
+                self.axis_y_temp.setLabelsVisible(False)
+                self.axis_y_wind.setLabelsVisible(False)
+                # Titel entfernen
+                self.axis_x.setTitleText("")
+                self.axis_y_temp.setTitleText("")
+                self.axis_y_wind.setTitleText("")
+        else:
+            # 1. Zurück zur Standardgröße
+            width, height = 1280, 720
+            self.resize(width, height)
+
+            # 2. WICHTIG: Manuelle PlotArea löschen!
+            # Damit darf Qt das Diagramm wieder automatisch im Fenster verteilen.
+            self.chart.setPlotArea(QRectF())  # Übergabe eines leeren QRectF setzt es zurück
+
+            # 3. Margins zurück auf Standard
+            self.chart.setMargins(QMargins(15, 10, 15, 60))
+
+            # 4. Hintergrund und Theme wiederherstellen
+            self.chart.setTheme(QChart.ChartTheme.ChartThemeDark)
+            self.chart.setBackgroundVisible(True)
+            self.update_chart_background()
+
+            # 5. Legende und Titel wieder normal positionieren
+            if self.chart.legend():
+                self.chart.legend().show()
+                #self.chart.legend().setAlignment(Qt.AlignmentFlag.AlignBottom)  # Legende wieder nach unten
+                # Geometrie auf 0 setzen, damit das automatische Layout übernimmt
+                self.chart.legend().setGeometry(QRectF())
+
+            self.chart.setTitle("Wetterdaten der letzten 7 Tage")
+
+            # Achsen wieder beschriften
+            if has_axes:
+                self.axis_x.setLabelsVisible(True)
+                self.axis_y_temp.setLabelsVisible(True)
+                self.axis_y_wind.setLabelsVisible(True)
+                self.axis_y_wind.setLineVisible(True)
+                self.axis_y_temp.setTitleText("Temperatur [°C]")
+                self.axis_y_wind.setTitleText("Wind [km/h]")
+
+        # WICHTIG: Chart anweisen, sich neu zu zeichnen
+        self.chart.update()
+
     def update_chart_background(self, color_top=QColor(40, 80, 40, 150), color_bottom=QColor(40, 60, 100, 150)):
         # Neuen Gradienten erstellen
         gradient = QLinearGradient(0, 0, 0, 1)
@@ -270,21 +363,40 @@ class ChartDialog(QDialog):
             self.dir_series_map[d].setBorderColor(Qt.GlobalColor.transparent)
 
     def chart_image(self):
-        # Wir erstellen ein QImage in der Größe des Charts
-        image = QImage(self.chart.size().toSize(), QImage.Format.Format_ARGB32)
-        image.fill(Qt.GlobalColor.transparent)  # Optional, da der Verlauf alles füllt
+        # WICHTIG: Das Chart braucht eine Viewport-Größe, um sich zu berechnen
+        size = self.size()
 
-        # Ein Painter rendert das komplette Chart-Objekt (inkl. BackgroundBrush)
+        # Erstelle eine temporäre ChartView, falls keine existiert
+        # oder nutze die vorhandene, um das Layout zu erzwingen
+        view = QChartView(self.chart)
+        view.setMinimumSize(size)
+        view.resize(size)
+
+        # Das hier erzwingt, dass Qt die Achsen und Abstände berechnet
+        self.chart.layout().invalidate()
+        self.chart.layout().activate()
+
+        image = QImage(size, QImage.Format.Format_ARGB32)
+        image.fill(Qt.GlobalColor.transparent)
+
         painter = QPainter(image)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Jetzt das Chart direkt in den Painter rendern
         self.chart.scene().render(painter)
         painter.end()
+
         return image
 
     def close_window(self):
         self.close()
 
     def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_L:
+            self.live_mode = not self.live_mode
+            logger.info(f"Schalte Chart-Modus um: {'LIVE' if self.live_mode else 'NORMAL'}")
+            self.update_ui_mode()
+
         # Screenshot-Funktion mit Strg+S
         if event.key() == Qt.Key.Key_S and (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
 
@@ -321,3 +433,53 @@ def show_chart(parent_widget):
     dialog = ChartDialog(parent_widget)
     dialog.setStyleSheet("QDialog { background-color: #000000; }")
     dialog.exec()
+
+
+def export_live_chart_rgba():
+    try:
+        # 1. Dialog im Live-Modus erstellen
+        dialog = ChartDialog(live_mode=True)
+        dialog.update_ui_mode()
+
+        # Zielgröße definieren
+        width, height = 720, 320
+
+        # --- DER ENTSCHEIDENDE FIX ---
+        # Wir zwingen das Chart-Objekt auf die volle Größe der Scene
+        dialog.chart.resize(width, height)
+        # Wir setzen das Layout-Handling außer Kraft und geben feste Maße vor
+        dialog.chart.setGeometry(0, 0, width, height)
+        # ------------------------------
+
+        # Headless-Berechnung (Schocktherapie)
+        dialog.setWindowOpacity(0.0)
+        dialog.show()
+        from PySide6.QtCore import QCoreApplication
+        QCoreApplication.processEvents()
+
+        # QImage in Zielgröße erstellen
+        q_img = QImage(width, height, QImage.Format.Format_ARGB32)
+        q_img.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(q_img)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Wir rendern nun die Scene.
+        # Da das Chart nun 400x160 groß ist, füllt es das QImage aus.
+        dialog.chart.scene().render(painter)
+        painter.end()
+
+        dialog.close()
+
+        # Konvertierung zu PIL (unverändert)
+        q_img = q_img.convertToFormat(QImage.Format.Format_RGBA8888)
+        from PIL import Image
+        pil_img = Image.frombuffer(
+            "RGBA", (q_img.width(), q_img.height()),
+            q_img.bits().tobytes(), "raw", "RGBA", 0, 1
+        )
+        return pil_img.copy()
+
+    except Exception as e:
+        logger.error(f"Fehler im Chart-Export: {e}")
+        return None
