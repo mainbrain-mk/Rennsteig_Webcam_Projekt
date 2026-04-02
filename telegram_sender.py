@@ -11,10 +11,15 @@ from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 logger = logging.getLogger(__name__)
 
 next_send = datetime.now()
-
+bot = None
 def telegram_enabled():
     """Prüft, ob Telegram korrekt konfiguriert ist."""
     return bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)
+
+def start_bot():
+    global bot
+
+    bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
 async def send_telegram_photo(img_pil, caption=""):
     """Sendet ein PIL-Bild direkt an Telegram."""
@@ -22,7 +27,8 @@ async def send_telegram_photo(img_pil, caption=""):
         logger.warning("Telegram nicht konfiguriert – kein Versand.")
         return
 
-    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+    if not bot:
+        start_bot()
 
     bio = BytesIO()
     img_pil.save(bio, format="JPEG")
@@ -75,7 +81,10 @@ async def telegram_loop(viewer):
         await asyncio.sleep(wait_seconds)
 
         # Bild senden
-        await send_current_viewer_image(viewer)
+        send = await send_current_viewer_image(viewer)
+        if not send:
+            await asyncio.sleep(60)
+            await send_current_viewer_image(viewer)
 
     except Exception as e:
         logger.error(f"Fehler in der Telegram-Loop: {e}")
@@ -83,9 +92,9 @@ async def telegram_loop(viewer):
 
 async def send_current_viewer_image(viewer):
     """Holt das aktuelle Bild aus dem Viewer und sendet es sofort."""
-    if viewer.last_raw_image is None:
+    if viewer.actual_raw_image is None:
         logger.warning("Versand abgebrochen: Viewer hat noch kein Bild empfangen.")
-        return
+        return False
 
     try:
         # Kopie erstellen, um das Original-Frame nicht zu korrumpieren
@@ -105,5 +114,5 @@ async def send_current_viewer_image(viewer):
         return await send_telegram_photo(img, caption=caption_text)
 
     except Exception as e:
-        logger.error(f"Fehler beim manuellen Telegram-Versand: {e}")
+        logger.error(f"Fehler beim Telegram-Versand: {e}")
         return False

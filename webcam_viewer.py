@@ -11,7 +11,7 @@ from PySide6.QtCore import Qt, Slot, QRect
 from PIL import Image
 from astral import LocationInfo, Observer
 from astral.sun import sun, midnight
-from chart import show_chart
+from chart import show_chart, export_live_chart_rgba
 
 # Deine bestehenden Module
 from config import (
@@ -45,6 +45,7 @@ class WebcamViewer(QWidget):
 
         # Daten-Speicher
         self.last_raw_image = None
+        self.actual_raw_image = None
         self.last_weather_formatted = None
         self.weather_service = WeatherService()
 
@@ -54,6 +55,8 @@ class WebcamViewer(QWidget):
         self.logo_button.clicked.connect(self.on_logo_click)
 
         self.old_geometry = QRect(3840, 866, 1920, 1080)
+
+        self.current_chart_overlay = None
 
     @Slot()
     def on_logo_click(self):
@@ -98,7 +101,21 @@ class WebcamViewer(QWidget):
         full_img = self.last_raw_image.copy()
         full_img = draw_overlay(full_img, w_data)
 
-        # 2. PIL Image zu QPixmap konvertieren
+        # 2. NEU: Chart-Overlay einfügen, falls vorhanden
+        try:
+            if self.current_chart_overlay:
+                # Beispiel-Position: Unten links (anpassen nach Bedarf)
+                # x=50, y = Bildhöhe - Chart-Höhe - 50px Puffer
+                chart_x = 20
+                chart_y = 80 + 320 + 20
+
+                if hasattr(self, 'current_chart_overlay') and self.current_chart_overlay:
+                    # Wir nutzen die berechneten Koordinaten
+                    full_img.paste(self.current_chart_overlay, (chart_x, chart_y), self.current_chart_overlay)
+        except Exception as e:
+            logger.error(f"Error beim Chart Overlay: {e}", exc_info=True)
+
+        # 3. PIL Image zu QPixmap konvertieren
         data = full_img.convert("RGBA").tobytes("raw", "RGBA")
         qimg = QImage(data, full_img.size[0], full_img.size[1], QImage.Format.Format_RGBA8888)
         pixmap = QPixmap.fromImage(qimg)
@@ -113,6 +130,7 @@ class WebcamViewer(QWidget):
 
         # 4. Klick-Bereich des Buttons anpassen
         self.update_button_geometry(scaled_pixmap)
+        self.actual_raw_image = self.last_raw_image
 
     def show_waiting_message(self, text):
         """Zeigt einen Hinweistext im Hauptlabel an, wenn kein Bild verfügbar ist."""
@@ -181,7 +199,7 @@ class WebcamViewer(QWidget):
                     wait_seconds = 60 - now.second + target_second - (now.microsecond / 1_000_000.0)
 
                 # Warten bis zum nächsten Slot
-                await asyncio.sleep(wait_seconds)
+                await asyncio.sleep(max(1.0, wait_seconds))
 
                 # Bild ziehen
                 await _download(session)
@@ -212,13 +230,24 @@ class WebcamViewer(QWidget):
                     dt = self.last_weather_formatted.get("datetime")
                     time_str = dt.strftime('%H:%M') if dt else "--:--"
                     g15.last_update(time_str)
+
+                    try:
+                        # Wir rufen die Funktion auf, die wir gerade in chart.py gebaut haben
+                        self.current_chart_overlay = export_live_chart_rgba()
+                        if self.current_chart_overlay:
+                            # Speichert das transparente PNG im Projektordner
+                            #self.current_chart_overlay.save("last_chart_debug.png")
+                            #logger.info("Chart-Overlay als Bilddatei exportiert (last_chart_debug.png).")
+                            pass
+                        logger.debug("Wetter-Chart Overlay erfolgreich aktualisiert.")
+                    except Exception as ce:
+                        logger.error(f"Fehler beim Chart-Export: {ce}")
+
                     self.update_display()  # UI-Refresh triggern
 
                     # 4. Wartezeit direkt vom Objekt berechnen lassen
                     wait_time = self.weather_service.compute_next_wait_seconds()
                     logger.info(f"Wetter aktualisiert. Nächster Check in {int(wait_time)}s.")
-
-
 
                 else:
                     # Fehlerfall: Kurze Wartezeit vor Retry
@@ -235,12 +264,12 @@ class WebcamViewer(QWidget):
 
     def get_current_image(self):
         """Schnittstelle für den Telegram-Sender."""
-        if self.last_raw_image is None:
+        if self.actual_raw_image is None:
             return None
 
         w_data = self.sunrise_sunset()
 
-        return draw_overlay(self.last_raw_image.copy(), w_data)
+        return draw_overlay(self.actual_raw_image.copy(), w_data)
 
     def closeEvent(self, event):
         """Wird aufgerufen, wenn der Benutzer das Fenster schließt."""

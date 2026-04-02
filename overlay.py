@@ -66,7 +66,7 @@ def get_dynamic_color(w: dict):
     # Definierte Farbpunkte
     color_midnight = (5, 5, 20)      # Tiefste Nacht (fast Schwarz-Blau)
     color_dawn     = (100, 50, 100)  # Dämmerung (Violett/Rosa)
-    color_sunrise  = (0, 255, 255)   # Sonnenaufgang (Türkis/Cyan)
+    color_sunrise  = (0, 200, 200)   # Sonnenaufgang (Türkis/Cyan)
     color_noon     = (0, 175, 255)   # Mittags (Helles Blau)
     color_sunset   = (255, 100, 0)   # Sonnenuntergang (Warmes Orange/Gold)
     color_dusk     = (60, 0, 90)     # Späte Dämmerung (Dunkelviolett)
