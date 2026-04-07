@@ -251,7 +251,7 @@ class WebcamViewer(QWidget):
 
                 else:
                     # Fehlerfall: Kurze Wartezeit vor Retry
-                    wait_time = 30.0
+                    wait_time = 60.0
                     logger.warning(f"Retry-Modus: Nächster Versuch in {wait_time} Sekunden...")
 
             except Exception as e:
