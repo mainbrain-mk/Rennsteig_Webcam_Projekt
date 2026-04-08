@@ -11,7 +11,7 @@ async def supervisor(coro_func, name, *args):
                 await asyncio.sleep(2)
         except asyncio.CancelledError:
             # Dies wird jetzt beim Beenden der main.py getriggert
-            logging.error(f"Supervisor '{name}' wurde sauber gestoppt.", exc_info=True)
+            logging.error(f"Supervisor '{name}' wurde sauber gestoppt.")
             break
         except Exception as e:
-            logging.error(f"Supervisor '{name}' Fehler: {e}")
+            logging.error(f"Supervisor '{name}' Fehler: {e}", exc_info=True)
