@@ -92,13 +92,14 @@ class WebcamViewer(QWidget):
 
     def update_display(self):
         """Rendert das Overlay auf das Original und skaliert das Ergebnis."""
-        if self.last_raw_image is None:
+        img_to_render = self.last_raw_image or self.actual_raw_image
+        if img_to_render is None:
             return
 
         # 1. Overlay auf das Bild in voller Größe zeichnen
         w_data = self.sunrise_sunset()
 
-        full_img = self.last_raw_image.copy()
+        full_img = img_to_render.copy()
         full_img = draw_overlay(full_img, w_data)
 
         # 2. NEU: Chart-Overlay einfügen, falls vorhanden
@@ -175,10 +176,20 @@ class WebcamViewer(QWidget):
                 async with session.get(URL_WEBCAM, timeout=15) as resp:
                     if resp.status == 200:
                         img_data = await resp.read()
-                        self.last_raw_image = Image.open(BytesIO(img_data))
-                        self.update_display()
-                        logger.debug(f"Webcam-Bild geladen um {datetime.now().strftime('%H:%M:%S')}")
-                        return True
+                        try:
+                            new_img = Image.open(BytesIO(img_data))
+                            new_img.load()
+                            self.last_raw_image = new_img
+
+                            self.update_display()
+                            logger.debug(f"Webcam-Bild geladen um {datetime.now().strftime('%H:%M:%S')}")
+                            return True
+
+                        except Exception as img_err:
+                            logger.warning(f"Bild-Daten korrupt: {img_err}. Nutze Backup.")
+                            # Wir lassen self.last_raw_image einfach auf dem alten Stand (actual_raw_image)
+                            return False
+
             except Exception as e:
                 logger.error(f"Fehler beim Webcam-Download: {e}")
             return False
