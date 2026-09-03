@@ -16,7 +16,8 @@ from chart import show_chart, export_live_chart_rgba
 # Deine bestehenden Module
 from config import (
     URL_WEBCAM, ORIG_W,
-    OVERLAY_ORIG_X, OVERLAY_ORIG_Y, OVERLAY_ORIG_W, OVERLAY_ORIG_H
+    OVERLAY_ORIG_X, OVERLAY_ORIG_Y, OVERLAY_ORIG_W, OVERLAY_ORIG_H,
+    WEATHER_BOX_X, WEATHER_BOX_Y, WEATHER_BOX_H
 )
 from overlay import draw_overlay
 from weather import WeatherService
@@ -105,10 +106,10 @@ class WebcamViewer(QWidget):
         # 2. NEU: Chart-Overlay einfügen, falls vorhanden
         try:
             if self.current_chart_overlay:
-                # Beispiel-Position: Unten links (anpassen nach Bedarf)
-                # x=50, y = Bildhöhe - Chart-Höhe - 50px Puffer
-                chart_x = 20
-                chart_y = 80 + 320 + 20
+                # Position: direkt unterhalb der Wetter-Overlay-Box (siehe overlay.py),
+                # von den gleichen Konstanten abgeleitet statt dupliziert.
+                chart_x = WEATHER_BOX_X
+                chart_y = WEATHER_BOX_Y + WEATHER_BOX_H + 20
 
                 if hasattr(self, 'current_chart_overlay') and self.current_chart_overlay:
                     # Wir nutzen die berechneten Koordinaten
@@ -189,6 +190,8 @@ class WebcamViewer(QWidget):
                             logger.warning(f"Bild-Daten korrupt: {img_err}. Nutze Backup.")
                             # Wir lassen self.last_raw_image einfach auf dem alten Stand (actual_raw_image)
                             return False
+                    else:
+                        logger.warning(f"Webcam-Download fehlgeschlagen: HTTP {resp.status} ({resp.reason}). Nutze Backup.")
 
             except Exception as e:
                 logger.error(f"Fehler beim Webcam-Download: {e}")
@@ -229,8 +232,10 @@ class WebcamViewer(QWidget):
 
                 if success:
                     # 2. In Datenbank speichern (Rohdaten liegen im Objekt)
+                    # asyncio.to_thread, da sqlite3 blockierend ist und sonst
+                    # den Event-Loop (und damit die Qt-UI) kurz einfrieren würde.
                     try:
-                        save_weather_to_db(self.weather_service.raw_data)
+                        await asyncio.to_thread(save_weather_to_db, self.weather_service.raw_data)
                         logger.debug("Wetterdaten erfolgreich in Datenbank gespeichert.")
                     except Exception as db_e:
                         logger.error(f"Fehler beim Speichern in die Datenbank: {db_e}")
@@ -244,7 +249,7 @@ class WebcamViewer(QWidget):
 
                     try:
                         # Wir rufen die Funktion auf, die wir gerade in chart.py gebaut haben
-                        self.current_chart_overlay = export_live_chart_rgba()
+                        self.current_chart_overlay = await export_live_chart_rgba()
                         if self.current_chart_overlay:
                             # Speichert das transparente PNG im Projektordner
                             #self.current_chart_overlay.save("last_chart_debug.png")

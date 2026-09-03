@@ -1,5 +1,3 @@
-# telegram_sender.py
-
 import asyncio
 import logging
 from datetime import datetime, timedelta
@@ -12,20 +10,20 @@ logger = logging.getLogger(__name__)
 
 next_send = datetime.now()
 bot = None
+
 def telegram_enabled():
     """Prüft, ob Telegram korrekt konfiguriert ist."""
     return bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)
 
 def start_bot():
     global bot
-
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
 async def send_telegram_photo(img_pil, caption=""):
     """Sendet ein PIL-Bild direkt an Telegram."""
     if not telegram_enabled():
         logger.warning("Telegram nicht konfiguriert – kein Versand.")
-        return
+        return False
 
     if not bot:
         start_bot()
@@ -53,42 +51,45 @@ async def telegram_loop(viewer):
     """
     sendet ein bild in Minute 01, 16, 31, 46
     """
-
     if not telegram_enabled():
         logger.info("Telegram deaktiviert – Loop wird nicht gestartet.")
         return
 
-    try:
-        # Aktuelle Zeit holen
-        now = datetime.now()
+    while True:
+        try:
+            now = datetime.now()
 
-        # Berechne die Minuten bis zum nächsten 15er Intervall
-        # Beispiel: 12:04 -> nächstes ist 12:15 (11 Min warten)
-        # Beispiel: 12:55 -> nächstes ist 13:00 (5 Min warten)
-        minutes_to_next_quarter = 15 - (now.minute % 15)
+            minutes_to_next_quarter = 15 - (now.minute % 15)
+            wait_seconds = ((minutes_to_next_quarter + 1) * 60) - now.second
 
-        # Zielzeit: Jetzt + Differenz, Sekunden auf 0, plus 5 Sek Puffer
-        # Der Puffer sorgt dafür, dass wir sicher im neuen Intervall landen
-        wait_seconds = ((minutes_to_next_quarter + 1) * 60) - now.second
+            if wait_seconds <= 0:
+                wait_seconds = 15 * 60
 
-        if wait_seconds <= 0:  # Falls wir extrem nah dran sind
-            wait_seconds = 15 * 60
+            next_send = now + timedelta(seconds=wait_seconds)
 
-        next_send = now + timedelta(seconds=wait_seconds)
+            logger.info(f"Nächster Telegram-Versand in {wait_seconds // 60} Min {wait_seconds % 60} Sek.")
 
-        logger.info(f"Nächster Telegram-Versand in {wait_seconds // 60} Min {wait_seconds % 60} Sek.")
+            await asyncio.sleep(wait_seconds)
 
-        await asyncio.sleep(wait_seconds)
+            # Bild senden
+            send = await send_current_viewer_image(viewer)
+            if not send:
+                await asyncio.sleep(60)
+                await send_current_viewer_image(viewer)
 
-        # Bild senden
-        send = await send_current_viewer_image(viewer)
-        if not send:
+        except asyncio.CancelledError:
+            # Wichtig: re-raisen statt nur zu loggen+breaken! Ein "break" hier lässt
+            # telegram_loop() normal zurückkehren, statt die Cancellation nach oben
+            # durchzureichen - der supervisor() in supervisor.py sieht das dann als
+            # regulären Abschluss an und startet telegram_loop() (mit frischem,
+            # nicht mehr abgebrochenem State) direkt wieder neu. Der ursprüngliche
+            # task.cancel()-Aufruf verpufft dadurch wirkungslos, und main.py hängt
+            # beim Beenden für immer in run_until_complete(), weil dieser Task nie fertig wird.
+            logger.info("Telegram-Loop wurde sauber beendet.")
+            raise
+        except Exception as e:
+            logger.error(f"Fehler in der Telegram-Loop: {e}")
             await asyncio.sleep(60)
-            await send_current_viewer_image(viewer)
-
-    except Exception as e:
-        logger.error(f"Fehler in der Telegram-Loop: {e}")
-        await asyncio.sleep(60)  # Bei Fehler eine Minute warten und neu versuchen
 
 async def send_current_viewer_image(viewer):
     """Holt das aktuelle Bild aus dem Viewer und sendet es sofort."""
@@ -97,18 +98,12 @@ async def send_current_viewer_image(viewer):
         return False
 
     try:
-        # Kopie erstellen, um das Original-Frame nicht zu korrumpieren
         img = viewer.get_current_image()
-
-        # Wetterdaten aus dem viewer extrahieren
-        # last_weather_formatted ist ein Dict, das wir in webcam_viewer.py befüllen
         w = viewer.last_weather_formatted or {}
 
-        # Werte auslesen (mit Fallback '--' falls Daten fehlen)
         temp = w.get('temp', '--')
         wind = w.get('wind', '--')
 
-        # Caption zusammenbauen
         caption_text = f"🌡 Temperatur: {temp}\n💨 {wind}"
 
         return await send_telegram_photo(img, caption=caption_text)

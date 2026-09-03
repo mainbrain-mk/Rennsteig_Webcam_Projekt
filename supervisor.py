@@ -7,11 +7,11 @@ async def supervisor(coro_func, name, *args):
     """Startet eine async-Funktion und startet sie bei Absturz automatisch neu."""
     while True:
         try:
-                await coro_func(*args)
-                await asyncio.sleep(2)
+            await coro_func(*args)
+            await asyncio.sleep(2)
         except asyncio.CancelledError:
-            # Dies wird jetzt beim Beenden der main.py getriggert
-            logging.error(f"Supervisor '{name}' wurde sauber gestoppt.")
+            logger.info(f"Supervisor '{name}' wurde sauber gestoppt.")
             break
         except Exception as e:
-            logging.error(f"Supervisor '{name}' Fehler: {e}", exc_info=True)
+            logger.error(f"Supervisor '{name}' Fehler: {e}", exc_info=True)
+            await asyncio.sleep(2)

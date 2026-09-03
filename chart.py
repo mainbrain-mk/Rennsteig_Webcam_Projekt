@@ -1,5 +1,5 @@
+import asyncio
 import logging
-import traceback
 from datetime import datetime, timedelta
 
 import pytz
@@ -14,14 +14,17 @@ logger = logging.getLogger(__name__)
 
 
 class ChartDialog(QDialog):
-    def __init__(self, parent=None, live_mode=False):
+    def __init__(self, parent=None, live_mode=False, rows=None):
         super().__init__(parent)
         self.setWindowTitle("Wetterverlauf Rennsteigbahn")
         self.live_mode = live_mode
 
         layout = QVBoxLayout(self)
 
-        rows = load_last_7_days()
+        # rows kann vorab async geladen übergeben werden (siehe export_live_chart_rgba),
+        # damit der blockierende SQLite-Read nicht im Event-Loop-Thread passiert.
+        if rows is None:
+            rows = load_last_7_days()
         if not rows:
             layout.addWidget(QLabel("Keine Daten gefunden."))
             return
@@ -137,8 +140,8 @@ class ChartDialog(QDialog):
                         except ValueError:
                             continue  # Falls r[4] keine Zahl ist
 
-            except:
-                traceback.print_exc()
+            except Exception:
+                logger.exception("Fehler beim Verarbeiten einer Wetter-Zeile, überspringe.")
                 continue
 
         # 5. Series binden
@@ -363,14 +366,17 @@ class ChartDialog(QDialog):
             self.dir_series_map[d].setBorderColor(Qt.GlobalColor.transparent)
 
     def chart_image(self):
-        # WICHTIG: Das Chart braucht eine Viewport-Größe, um sich zu berechnen
+        # WICHTIG: Das Chart braucht eine Viewport-Größe, um sich zu berechnen.
+        # Wir nutzen dafür die bereits vorhandene self.view, die self.chart schon
+        # besitzt. Eine neue QChartView(self.chart) hier zu erzeugen (wie zuvor)
+        # reparentet den Chart auf diese temporäre View - sobald die dann am
+        # Funktionsende von Python garbage-collected wird, reißt Qt den (immer
+        # noch von self referenzierten) Chart mit in den Tod. Jede weitere
+        # Interaktion mit dem Dialog crasht danach mit
+        # "RuntimeError: Internal C++ object already deleted".
         size = self.size()
-
-        # Erstelle eine temporäre ChartView, falls keine existiert
-        # oder nutze die vorhandene, um das Layout zu erzwingen
-        view = QChartView(self.chart)
-        view.setMinimumSize(size)
-        view.resize(size)
+        self.view.setMinimumSize(size)
+        self.view.resize(size)
 
         # Das hier erzwingt, dass Qt die Achsen und Abstände berechnet
         self.chart.layout().invalidate()
@@ -435,10 +441,14 @@ def show_chart(parent_widget):
     dialog.exec()
 
 
-def export_live_chart_rgba():
+async def export_live_chart_rgba():
     try:
-        # 1. Dialog im Live-Modus erstellen
-        dialog = ChartDialog(live_mode=True)
+        # 1. Daten in einem Worker-Thread laden, damit der blockierende
+        # SQLite-Read nicht den Event-Loop (und damit die Qt-UI) blockiert.
+        rows = await asyncio.to_thread(load_last_7_days)
+
+        # 2. Dialog im Live-Modus erstellen
+        dialog = ChartDialog(live_mode=True, rows=rows)
         dialog.update_ui_mode()
 
         # Zielgröße definieren
@@ -453,9 +463,17 @@ def export_live_chart_rgba():
 
         # Headless-Berechnung (Schocktherapie)
         dialog.setWindowOpacity(0.0)
-        dialog.show()
+        #dialog.show()
         from PySide6.QtCore import QCoreApplication
-        QCoreApplication.processEvents()
+        # Wichtig: sendPostedEvents() statt processEvents() verwenden!
+        # processEvents() pumpt die komplette Event-Loop inkl. der Socket-Notifier,
+        # über die qasync den asyncio-Reactor antreibt. Da diese Funktion aus einem
+        # laufenden asyncio-Task heraus aufgerufen wird (update_weather_loop),
+        # reentert processEvents() den Task-Scheduler und crasht mit
+        # "Cannot enter into task X while another task Y is being executed".
+        # sendPostedEvents() liefert nur die bereits gequeuten Resize-/Layout-Events
+        # aus, ohne die Event-Loop zu pumpen.
+        QCoreApplication.sendPostedEvents()
 
         # QImage in Zielgröße erstellen
         q_img = QImage(width, height, QImage.Format.Format_ARGB32)

@@ -3,6 +3,8 @@ from datetime import timedelta
 
 from PIL import ImageDraw, ImageFont, Image
 
+from config import WEATHER_BOX_X, WEATHER_BOX_Y, WEATHER_BOX_W, WEATHER_BOX_H
+
 # Logger für dieses Modul konfigurieren
 logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
@@ -97,8 +99,16 @@ def get_dynamic_color(w: dict):
 
     # 4. Nachmittag (Noon bis Sunset)
     elif noon < now <= sunset:
-        t = get_t(noon, sunset, now)
-        return lerp_color(color_noon, color_sunset, t)
+        transition_start = sunset - timedelta(hours=2)
+
+        if now <= transition_start:
+            # Es ist nach Mittag, aber noch mehr als 2 Stunden vor Sonnenuntergang
+            # Wir bleiben bei der Mittagsfarbe
+            return color_noon
+        else:
+            # Der 2-Stunden-Countdown läuft: Übergang von Noon zu Sunset
+            t = get_t(transition_start, sunset, now)
+            return lerp_color(color_noon, color_sunset, t)
 
     # 5. Abenddämmerung (Sunset bis Dusk)
     elif sunset < now <= dusk:
@@ -117,8 +127,8 @@ def draw_overlay(img, weather_info: dict):
     w = weather_info or {}
 
     # Box-Parameter
-    OX, OY = 20, 80
-    OW, OH = 720, 320  # Etwas breiter gemacht
+    OX, OY = WEATHER_BOX_X, WEATHER_BOX_Y
+    OW, OH = WEATHER_BOX_W, WEATHER_BOX_H
     CORNER_RADIUS = 20
 
     #draw.rounded_rectangle([OX, OY, OX + OW, OY + OH], radius=CORNER_RADIUS, fill=(120, 170, 255))

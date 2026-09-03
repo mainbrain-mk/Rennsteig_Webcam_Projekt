@@ -1,3 +1,5 @@
+#weather.py
+
 import logging
 import random
 import aiohttp
@@ -80,8 +82,8 @@ class WeatherService:
             "elevation": f"{int(elevation)} m ü. NHN",
             "temp": f"{temp:.1f} °C" if temp is not None else "-- °C",
             "feels": f"Gefühlt {feels:.1f} °C" if feels is not None else "Gefühlt -- °C",
-            "wind": f"Wind: {wind} km/h" if wind is not None else "Wind: -- km/h",
-            "gusts": f"Böen: {gusts} km/h" if gusts is not None else "Böen: -- km/h",
+            "wind": f"Wind: {wind:.1f} km/h" if wind is not None else "Wind: -- km/h",
+            "gusts": f"Böen: {gusts:.1f} km/h" if gusts is not None else "Böen: -- km/h",
             "humidity": f"Feuchte: {humidity} %" if humidity is not None else "Feuchte: -- %",
             "pressure": f"Druck: {pressure} hPa" if pressure is not None else "Druck: -- hPa",
             "precipitation": f"Niederschlag: {precip} mm",

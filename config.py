@@ -27,6 +27,15 @@ OVERLAY_ORIG_Y = 100
 OVERLAY_ORIG_W = 400
 OVERLAY_ORIG_H = 160
 
+# Position/Größe der Wetter-Overlay-Box (Icon + Temperatur, siehe overlay.py).
+# Zentral hier definiert, damit webcam_viewer.py die Position des Chart-Overlays
+# (das unterhalb dieser Box sitzt) davon ableiten kann, statt eigene Kopien
+# dieser Werte zu pflegen, die bei Änderungen leicht auseinanderlaufen.
+WEATHER_BOX_X = 20
+WEATHER_BOX_Y = 80
+WEATHER_BOX_W = 720
+WEATHER_BOX_H = 320
+
 # Jetzt die Werte aus der Umgebung ziehen
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")

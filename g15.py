@@ -17,7 +17,7 @@ last_update_time = "update: --:--"
 try:
     pynvml.nvmlInit()
     nvml_available = True
-except:
+except Exception:
     nvml_available = False
 
 def get_cpu_temp():
@@ -36,10 +36,14 @@ def get_gpu_temp_nvidia():
     try:
         handle = pynvml.nvmlDeviceGetHandleByIndex(0)
         return pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
-    except:
+    except Exception:
         return 0.0
 def shut_down():
-    pynvml.nvmlShutdown()
+    # Nur aufrufen, wenn nvmlInit() beim Start auch erfolgreich war (z.B. keine
+    # NVIDIA-GPU vorhanden) - sonst wirft nvmlShutdown() eine Exception, die den
+    # finally-Block in main.py mitten in der Cleanup-Sequenz abbricht.
+    if nvml_available:
+        pynvml.nvmlShutdown()
 
 def last_update(update="--:--"):
     global last_update_time
@@ -57,7 +61,7 @@ def g15_live_clock():
     try:
         if dev.is_kernel_driver_active(0):
             dev.detach_kernel_driver(0)
-    except:
+    except Exception:
         pass
     dev.set_configuration()
 
@@ -116,6 +120,12 @@ def g15_live_clock():
         print("\nTest beendet. Display wird geleert...")
         # Optional: Display beim Beenden leeren
         dev.write(0x02, b'\x03' + b'\x00' * 991, 1000)
+
+
+async def run_g15(loop):
+    """Async-Wrapper um g15_live_clock(), damit der supervisor() in main.py
+    den Thread bei einem Absturz (z.B. USB-Gerät abgezogen) automatisch neu starten kann."""
+    await loop.run_in_executor(None, g15_live_clock)
 
 
 if __name__ == "__main__":
