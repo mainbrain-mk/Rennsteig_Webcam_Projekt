@@ -17,6 +17,18 @@ URL_WEATHER = (
     "&timezone=auto"
 )
 
+# Zweiter Standort, nur für die kleine Temperatur/Luftdruck-Zeile im G15-Display
+# (siehe g15.py) - unabhängig vom Rennsteigbahn-Standort oben.
+LAT_2 = 52.746065458903544
+LON_2 = 13.180933754639998
+
+URL_WEATHER_2 = (
+    f"https://api.open-meteo.com/v1/forecast?"
+    f"latitude={LAT_2}&longitude={LON_2}"
+    "&current=temperature_2m,pressure_msl"
+    "&timezone=auto"
+)
+
 # Originalgröße des Webcam-Bildes
 ORIG_W = 2560
 ORIG_H = 1440

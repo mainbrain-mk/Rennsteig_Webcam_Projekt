@@ -36,3 +36,4 @@ python-dotenv
 pyusb
 psutil
 nvidia-ml-py
+flask

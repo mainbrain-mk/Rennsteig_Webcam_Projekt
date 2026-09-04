@@ -61,6 +61,8 @@ async def setup_tasks(loop, viewer):
         loop.create_task(supervisor(g15.run_g15, "G15", loop))
         logger.info("G15-Task (supervised) wurde gestartet.")
 
+        loop.create_task(supervisor(g15.update_secondary_weather_loop, "G15-Wetter"))
+
         loop.create_task(supervisor(viewer.update_webcam_loop, "Webcam"))
         loop.create_task(supervisor(viewer.update_weather_loop, "Wetter"))
 

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 import usb.core
@@ -7,12 +8,16 @@ import psutil
 import pynvml
 from PIL import Image, ImageDraw, ImageFont
 
+from config import URL_WEATHER_2
+from weather import WeatherService
+
 # Logger für dieses Modul konfigurieren
 logger = logging.getLogger(__name__)
 
 keep_running = True
 
 last_update_time = "update: --:--"
+last_secondary_weather = "---"
 
 try:
     pynvml.nvmlInit()
@@ -48,6 +53,35 @@ def shut_down():
 def last_update(update="--:--"):
     global last_update_time
     last_update_time = f"upd: {update}"
+
+def set_secondary_weather(temp, pressure):
+    """Aktualisiert die Temperatur/Luftdruck-Zeile des zweiten Standorts (URL_WEATHER_2)."""
+    global last_secondary_weather
+    if temp is not None and pressure is not None:
+        last_secondary_weather = f"{temp:.0f}°C {pressure:.0f}hPa"
+    else:
+        last_secondary_weather = "---"
+
+async def update_secondary_weather_loop():
+    """Holt periodisch Wetterdaten für den zweiten Standort (nur für die G15-Zeile
+    unter der Uhr, kein DB-Speichern/Overlay/Chart wie beim Rennsteigbahn-Standort)."""
+    logger.info("Sekundärer Wetter-Loop (G15) gestartet.")
+    service = WeatherService(url=URL_WEATHER_2)
+
+    while True:
+        try:
+            success = await service.update()
+            if success:
+                cw = service.raw_data.get("current", {})
+                set_secondary_weather(cw.get("temperature_2m"), cw.get("pressure_msl"))
+                wait_time = service.compute_next_wait_seconds()
+            else:
+                wait_time = 60.0
+        except Exception as e:
+            logger.error(f"Fehler im sekundären Wetter-Loop (G15): {e}")
+            wait_time = 60.0
+
+        await asyncio.sleep(wait_time)
 
 def g15_live_clock():
     global keep_running
@@ -86,11 +120,16 @@ def g15_live_clock():
             # Text zeichnen (Schwarz/0 = Sichtbar auf LCD)
             # Nutzt Standardschrift, falls keine .ttf geladen wird
             draw.text((5, 0), datum, font=font_d, fill=0)
-            draw.text((3, 20), current_time, font=font_t, fill=0)
+            draw.text((3, 11), current_time, font=font_t, fill=0)
+            # Zweiter Standort (Temperatur + Luftdruck) in der Zeile, die durch
+            # das Verschieben der Uhr frei geworden ist. x=1 statt 3, damit auch
+            # der Extremfall "-15°C 1035hPa" (78px) nicht in die rechte Spalte
+            # bei x=80 hineinragt.
+            draw.text((1, 30), last_secondary_weather, font=font_d, fill=0)
 
-            draw.text((80, 0), temp_text_cpu, font=font_d, fill=0)
-            draw.text((80, 12), temp_text_gpu, font=font_d, fill=0)
-            draw.text((80, 26), last_update_time, font=font_d, fill=0)
+            draw.text((90, 0), temp_text_cpu, font=font_d, fill=0)
+            draw.text((90, 12), temp_text_gpu, font=font_d, fill=0)
+            draw.text((90, 26), last_update_time, font=font_d, fill=0)
 
             # Rahmen zur Kontrolle, ob das Alignment noch stimmt
             #draw.rectangle([0, 0, 159, 42], outline=0)
